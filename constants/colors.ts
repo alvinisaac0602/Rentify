@@ -6,9 +6,9 @@ export const Colors = {
   apartmentLight: '#DBEAFE',
   apartmentDark: '#1E40AF',
 
-  office: '#7C3AED',         // Purple
-  officeLight: '#EDE9FE',
-  officeDark: '#5B21B6',
+  hostel: '#7C3AED',          // Purple
+  hostelLight: '#EDE9FE',
+  hostelDark: '#5B21B6',
 
   shop: '#EA580C',           // Orange
   shopLight: '#FFEDD5',
@@ -53,7 +53,7 @@ export const Colors = {
   cardOverlay: 'rgba(15, 23, 42, 0.4)',
 };
 
-export type CategoryType = 'apartment' | 'office' | 'shop' | 'airbnb';
+export type CategoryType = 'apartment' | 'hostel' | 'shop' | 'airbnb';
 
 export const CategoryMeta: Record<CategoryType, {
   label: string;
@@ -73,14 +73,14 @@ export const CategoryMeta: Record<CategoryType, {
     subtitle: 'Long-term',
     emoji: '🏠',
   },
-  office: {
-    label: 'Offices',
-    icon: 'office-building',
-    color: Colors.office,
-    lightColor: Colors.officeLight,
-    darkColor: Colors.officeDark,
-    subtitle: 'Workspaces',
-    emoji: '🏢',
+  hostel: {
+    label: 'Hostels',
+    icon: 'bed',
+    color: Colors.hostel,
+    lightColor: Colors.hostelLight,
+    darkColor: Colors.hostelDark,
+    subtitle: 'Budget stays',
+    emoji: '🛏️',
   },
   shop: {
     label: 'Shops',

@@ -40,7 +40,7 @@ export default function MessagesListScreen() {
             <TouchableOpacity
               style={styles.signInBtn}
               activeOpacity={0.85}
-              onPress={() => requireAuth('Sign in to view your messages')}
+              onPress={() => router.push('/screens/auth' as any)}
             >
               <Text style={styles.signInText}>Sign In / Register</Text>
             </TouchableOpacity>

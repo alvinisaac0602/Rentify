@@ -13,13 +13,11 @@ import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/t
 import { MOCK_PROPERTIES } from '../../constants/mockData';
 import { CategoryCard } from '../../components/ui/CategoryCard';
 import { PropertyCard } from '../../components/ui/PropertyCard';
-import { WelcomeModal } from '../../components/modals/WelcomeModal';
-import { SavedModal } from '../../components/modals/SavedModal';
 import { useWelcomeModal } from '../../hooks/useWelcomeModal';
 import { useAuth } from '../../context/AuthContext';
 
 const LOCATIONS = ['Kampala', 'Ntinda', 'Kira', 'Nakawa', 'Kololo', 'Entebbe'];
-const CATEGORIES: CategoryType[] = ['apartment', 'office', 'shop', 'airbnb'];
+const CATEGORIES: CategoryType[] = ['apartment', 'hostel', 'shop', 'airbnb'];
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -28,13 +26,13 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('Kampala');
   const [savedIds, setSavedIds] = useState<string[]>([]);
-  const [showSaved, setShowSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   // Check if onboarding has been seen — redirect if not
   useEffect(() => {
     AsyncStorage.getItem('onboarding_done').then(val => {
       if (!val) router.replace('/onboarding' as any);
+      else if (shouldShow) router.push('/screens/welcome' as any);
     });
   }, []);
 
@@ -51,7 +49,7 @@ export default function HomeScreen() {
   const handleSave = (id: string) => {
     if (!requireAuth('Sign in to save properties')) return;
     setSavedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    setShowSaved(true);
+    router.push('/screens/saved-confirm' as any);
   };
 
   const handleRefresh = async () => {
@@ -103,7 +101,7 @@ export default function HomeScreen() {
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Search apartments, offices, shops, Airbnbs…"
+              placeholder="Search apartments, hostels, shops, Airbnbs…"
               placeholderTextColor={Colors.placeholder}
               style={styles.searchInput}
               onSubmitEditing={handleSearch}
@@ -217,9 +215,6 @@ export default function HomeScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <WelcomeModal visible={shouldShow} onExplore={dismiss} onHowItWorks={dismiss} />
-      <SavedModal visible={showSaved} onClose={() => setShowSaved(false)} />
     </SafeAreaView>
   );
 }
@@ -231,7 +226,7 @@ const styles = StyleSheet.create({
   greeting: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.8)', fontWeight: FontWeight.medium },
   tagline: { fontSize: FontSize['2xl'], color: Colors.white, fontWeight: FontWeight.bold, marginTop: 2 },
   notifBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
-  searchBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.white, borderRadius: Radius.xl, paddingHorizontal: Spacing.md, paddingVertical: 9, ...Shadow.md },
+  searchBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Colors.white, borderRadius: Radius.xl, paddingHorizontal: Spacing.md, paddingVertical: 6, ...Shadow.md },
   searchInput: { flex: 1, fontSize: FontSize.base, color: Colors.text },
   locationScroll: { marginTop: 4 },
   locationPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: Spacing.md, paddingVertical: 7, borderRadius: Radius.full, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)', marginRight: Spacing.sm },

@@ -26,10 +26,7 @@ export default function SavedScreen() {
   if (isGuest) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Favorites ❤️</Text>
-        </View>
+        <View style={{ height: Spacing.sm }} />
 
         {/* Guest Center Mode */}
         <View style={styles.centerContainer}>
@@ -63,7 +60,6 @@ export default function SavedScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Favorites ❤️</Text>
           <Text style={styles.subtitle}>{savedProperties.length} spaces secured</Text>
         </View>
         {savedProperties.length > 0 && (

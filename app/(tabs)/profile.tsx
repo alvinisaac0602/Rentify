@@ -40,10 +40,7 @@ export default function ProfileScreen() {
   if (isGuest) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
-        </View>
+        <View style={{ height: Spacing.sm }} />
 
         {/* Guest View card */}
         <View style={styles.guestCenter}>
@@ -93,8 +90,7 @@ export default function ProfileScreen() {
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Profile</Text>
+        <View style={[styles.header, { justifyContent: 'flex-end' }]}>
           <TouchableOpacity style={styles.cogBtn} activeOpacity={0.75}>
             <MaterialCommunityIcons name="cog-outline" size={22} color={Colors.text} />
           </TouchableOpacity>

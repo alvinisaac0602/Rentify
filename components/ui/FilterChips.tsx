@@ -20,7 +20,7 @@ interface FilterChipsProps {
 const CATEGORIES: { key: FilterState['category']; label: string; emoji: string }[] = [
   { key: 'all', label: 'All', emoji: '🔍' },
   { key: 'apartment', label: 'Apartments', emoji: '🏠' },
-  { key: 'office', label: 'Offices', emoji: '🏢' },
+  { key: 'hostel', label: 'Hostels', emoji: '🛏️' },
   { key: 'shop', label: 'Shops', emoji: '🏪' },
   { key: 'airbnb', label: 'Airbnbs', emoji: '🏨' },
 ];
@@ -131,13 +131,15 @@ export function FilterChips({ filters, onChange }: FilterChipsProps) {
 const styles = StyleSheet.create({
   scrollContainer: {
     flexGrow: 0,
+    flexShrink: 0,
+    height: 54,
   },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
     paddingHorizontal: Spacing.base,
-    paddingVertical: 8,
+    paddingVertical: 6,
   },
   chip: {
     flexDirection: 'row',
@@ -162,7 +164,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.textSecondary,
     fontWeight: FontWeight.medium,
-    lineHeight: 18,
   },
   activeText: {
     color: Colors.white,

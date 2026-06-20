@@ -4,13 +4,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, CategoryType } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Spacing } from '../../constants/theme';
 import { MOCK_PROPERTIES } from '../../constants/mockData';
 import { FilterChips, FilterState } from '../../components/ui/FilterChips';
 import { PropertyCard } from '../../components/ui/PropertyCard';
-import { SavedModal } from '../../components/modals/SavedModal';
 import { useAuth } from '../../context/AuthContext';
 
 const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
@@ -22,6 +21,7 @@ const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
 
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{ q?: string; category?: string }>();
+  const router = useRouter();
   const { requireAuth } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState(params.q ?? '');
@@ -33,7 +33,6 @@ export default function ExploreScreen() {
     priceRange: 'all',
   });
   const [savedIds, setSavedIds] = useState<string[]>([]);
-  const [showSaved, setShowSaved] = useState(false);
 
   const filtered = useMemo(() => {
     const [minPrice, maxPrice] = PRICE_THRESHOLDS[filters.priceRange];
@@ -54,20 +53,19 @@ export default function ExploreScreen() {
   const handleSave = (id: string) => {
     if (!requireAuth('Sign in to save properties')) return;
     setSavedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    setShowSaved(true);
+    router.push('/screens/saved-confirm' as any);
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Search header */}
       <View style={styles.header}>
-        <Text style={styles.title}>Explore</Text>
         <View style={styles.searchBar}>
           <MaterialCommunityIcons name="magnify" size={20} color={Colors.muted} />
           <TextInput
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search apartments, offices, shopsâ€¦"
+            placeholder="Search apartments, hostels, shops…"
             placeholderTextColor={Colors.placeholder}
             style={styles.searchInput}
             returnKeyType="search"
@@ -117,8 +115,6 @@ export default function ExploreScreen() {
           </View>
         )}
       />
-
-      <SavedModal visible={showSaved} onClose={() => setShowSaved(false)} />
     </SafeAreaView>
   );
 }
@@ -130,7 +126,7 @@ const styles = StyleSheet.create({
   searchBar: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     backgroundColor: Colors.surface, borderRadius: Radius.xl,
-    paddingHorizontal: Spacing.md, paddingVertical: 9,
+    paddingHorizontal: Spacing.md, paddingVertical: 6,
     borderWidth: 1.5, borderColor: Colors.border,
   },
   searchInput: { flex: 1, fontSize: FontSize.base, color: Colors.text },

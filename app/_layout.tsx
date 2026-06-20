@@ -2,7 +2,6 @@ import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthProvider } from '../context/AuthContext';
-import { AuthModal } from '../components/modals/AuthModal';
 
 export default function RootLayout() {
   return (
@@ -16,8 +15,15 @@ export default function RootLayout() {
             <Stack.Screen name="messages/[id]" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="landlord/dashboard" options={{ animation: 'slide_from_right' }} />
             <Stack.Screen name="landlord/add-property" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="screens/auth" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+            <Stack.Screen name="screens/welcome" options={{ animation: 'fade', presentation: 'modal' }} />
+            <Stack.Screen name="screens/saved-confirm" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+            <Stack.Screen name="screens/viewing-request" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="screens/booking" options={{ animation: 'slide_from_right' }} />
+            <Stack.Screen name="screens/fraud-warning" options={{ animation: 'slide_from_bottom', presentation: 'modal' }} />
+            <Stack.Screen name="screens/booking-success" options={{ animation: 'fade' }} />
+            <Stack.Screen name="screens/movers" options={{ animation: 'slide_from_right' }} />
           </Stack>
-          <AuthModal />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

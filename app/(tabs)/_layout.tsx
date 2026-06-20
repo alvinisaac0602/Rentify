@@ -16,7 +16,7 @@ interface TabIconProps {
 
 function TabIcon({ name, activeName, focused, color }: TabIconProps) {
   return (
-    <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
+    <View style={styles.iconWrap}>
       <MaterialCommunityIcons
         name={focused ? activeName : name}
         size={22}
@@ -68,20 +68,20 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="post"
+        options={{
+          title: 'Post',
+          tabBarIcon: ({ focused, color }) => (
+            <TabIcon name="plus-circle-outline" activeName="plus-circle" focused={focused} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="saved"
         options={{
           title: 'Saved',
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="heart-outline" activeName="heart" focused={focused} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="messages"
-        options={{
-          title: 'Messages',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="message-outline" activeName="message" focused={focused} color={color} />
           ),
         }}
       />
@@ -92,6 +92,14 @@ export default function TabsLayout() {
           tabBarIcon: ({ focused, color }) => (
             <TabIcon name="account-circle-outline" activeName="account-circle" focused={focused} color={color} />
           ),
+        }}
+      />
+      {/* Hidden from tab bar but still reachable as a route */}
+      <Tabs.Screen
+        name="messages"
+        options={{
+          href: null,
+          title: 'Messages',
         }}
       />
     </Tabs>
@@ -123,8 +131,5 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  iconWrapActive: {
-    backgroundColor: Colors.primaryLight,
   },
 });

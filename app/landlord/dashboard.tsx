@@ -32,7 +32,7 @@ export default function LandlordDashboard() {
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <LinearGradient
-          colors={[Colors.office, '#9333EA']}
+          colors={[Colors.hostel, '#9333EA']}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={styles.header}
         >
@@ -71,7 +71,7 @@ export default function LandlordDashboard() {
             activeOpacity={0.85}
           >
             <LinearGradient
-              colors={[Colors.primary, Colors.office]}
+              colors={[Colors.primary, Colors.hostel]}
               start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
               style={styles.addPropertyGradient}
             >

@@ -15,12 +15,6 @@ import { TrustBadge } from '../../components/ui/TrustBadge';
 import { TrustMeter } from '../../components/ui/TrustMeter';
 import { AmenityTag } from '../../components/ui/AmenityTag';
 import { Button } from '../../components/ui/Button';
-import { ViewingRequestModal } from '../../components/modals/ViewingRequestModal';
-import { AirbnbBookingModal } from '../../components/modals/AirbnbBookingModal';
-import { FraudWarningModal } from '../../components/modals/FraudWarningModal';
-import { SavedModal } from '../../components/modals/SavedModal';
-import { BookingSuccessModal } from '../../components/modals/BookingSuccessModal';
-import { MovingServiceModal } from '../../components/modals/MovingServiceModal';
 import { useAuth } from '../../context/AuthContext';
 
 const { width } = Dimensions.get('window');
@@ -35,12 +29,6 @@ export default function PropertyDetailsScreen() {
 
   const [activeImage, setActiveImage] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
-  const [showViewing, setShowViewing] = useState(false);
-  const [showBooking, setShowBooking] = useState(false);
-  const [showFraud, setShowFraud] = useState(false);
-  const [showSaved, setShowSaved] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [showMoving, setShowMoving] = useState(false);
 
   if (!property || !landlord) {
     return (
@@ -55,13 +43,16 @@ export default function PropertyDetailsScreen() {
   const handleSave = () => {
     if (!requireAuth('Sign in to save properties')) return;
     setIsSaved(v => !v);
-    if (!isSaved) setShowSaved(true);
+    if (!isSaved) router.push('/screens/saved-confirm' as any);
   };
 
   const handleViewingRequest = () => {
-    if (!property.isVerified) { setShowFraud(true); return; }
+    if (!property.isVerified) {
+      router.push('/screens/fraud-warning' as any);
+      return;
+    }
     if (!requireAuth('Sign in to request a viewing')) return;
-    setShowViewing(true);
+    router.push(`/screens/viewing-request?propertyTitle=${encodeURIComponent(property.title)}` as any);
   };
 
   const handleChat = () => {
@@ -71,17 +62,7 @@ export default function PropertyDetailsScreen() {
 
   const handleBook = () => {
     if (!requireAuth('Sign in to book this space')) return;
-    setShowBooking(true);
-  };
-
-  const handleBookingConfirmed = () => {
-    setShowBooking(false);
-    setShowSuccess(true);
-  };
-
-  const handleSuccessMessages = () => {
-    setShowSuccess(false);
-    router.push('/messages' as any);
+    router.push(`/screens/booking?propertyTitle=${encodeURIComponent(property.title)}&price=${encodeURIComponent(formatPrice(property.price, property.currency, property.pricePeriod))}` as any);
   };
 
   return (
@@ -261,7 +242,7 @@ export default function PropertyDetailsScreen() {
 
           {/* ─── Fraud Warning for unverified ────────── */}
           {!property.isVerified && (
-            <TouchableOpacity style={styles.fraudBanner} onPress={() => setShowFraud(true)}>
+            <TouchableOpacity style={styles.fraudBanner} onPress={() => router.push('/screens/fraud-warning' as any)}>
               <MaterialCommunityIcons name="alert-circle" size={18} color={Colors.warning} />
               <Text style={styles.fraudText}>
                 ⚠️ This listing is not fully verified. Tap to learn more.
@@ -286,46 +267,12 @@ export default function PropertyDetailsScreen() {
           style={{ flex: 1 }}
           leftIcon={<MaterialCommunityIcons name="message-text" size={16} color={Colors.primary} />}
         />
-        {property.category === 'airbnb' ? (
+        {property.category === 'airbnb' || property.category === 'hostel' ? (
           <Button label="Book Now" onPress={handleBook} variant="success" style={{ flex: 1 }} />
         ) : (
-          <Button label="🚚 Moving" onPress={() => setShowMoving(true)} variant="ghost" style={{ flex: 1 }} />
+          <Button label="🚚 Moving" onPress={() => router.push('/screens/movers' as any)} variant="ghost" style={{ flex: 1 }} />
         )}
       </View>
-
-      {/* ─── Modals ──────────────────────────────────── */}
-      <ViewingRequestModal
-        visible={showViewing}
-        onClose={() => setShowViewing(false)}
-        onSent={() => { setShowViewing(false); setShowMoving(true); }}
-        propertyTitle={property.title}
-      />
-      <AirbnbBookingModal
-        visible={showBooking}
-        onClose={() => setShowBooking(false)}
-        onConfirm={handleBookingConfirmed}
-        propertyTitle={property.title}
-        price={formatPrice(property.price, property.currency, property.pricePeriod)}
-      />
-      <FraudWarningModal
-        visible={showFraud}
-        onClose={() => setShowFraud(false)}
-        onReport={() => setShowFraud(false)}
-        onContinue={() => setShowFraud(false)}
-      />
-      <SavedModal visible={showSaved} onClose={() => setShowSaved(false)} />
-      <BookingSuccessModal
-        visible={showSuccess}
-        onClose={() => setShowSuccess(false)}
-        onViewMessages={handleSuccessMessages}
-      />
-      <MovingServiceModal
-        visible={showMoving}
-        onClose={() => setShowMoving(false)}
-        onBook={mover => {
-          setShowMoving(false);
-        }}
-      />
     </View>
   );
 }

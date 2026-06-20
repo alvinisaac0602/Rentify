@@ -22,7 +22,7 @@ export function WelcomeModal({ visible, onExplore, onHowItWorks }: WelcomeModalP
             end={{ x: 1, y: 1 }}
             style={styles.iconBg}
           >
-            <Text style={styles.icon}>🏡🏢🏪🏨</Text>
+            <Text style={styles.icon}>🏡🛏️🏪🏨</Text>
           </LinearGradient>
 
           <Text style={styles.title}>Welcome to Rentify</Text>

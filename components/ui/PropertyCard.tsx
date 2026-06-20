@@ -37,9 +37,10 @@ export function PropertyCard({ property, onSave, isSaved = false, horizontal = f
         style={[styles.hCard, Shadow.card]}
       >
         <Image
-          source={{ uri: imgError ? 'https://via.placeholder.com/120' : property.images[0] }}
+          source={{ uri: imgError ? 'https://picsum.photos/200/150' : property.images[0] }}
           style={styles.hImage}
           onError={() => setImgError(true)}
+          resizeMode="cover"
         />
         {property.isVerified && (
           <View style={[styles.hVerifiedDot, { backgroundColor: meta.color }]} />
@@ -76,9 +77,10 @@ export function PropertyCard({ property, onSave, isSaved = false, horizontal = f
       {/* Image */}
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: imgError ? 'https://via.placeholder.com/300' : property.images[0] }}
+          source={{ uri: imgError ? 'https://picsum.photos/400/300' : property.images[0] }}
           style={styles.image}
           onError={() => setImgError(true)}
+          resizeMode="cover"
         />
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.25)']}

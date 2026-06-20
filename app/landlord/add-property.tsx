@@ -20,7 +20,7 @@ const STEPS = [
   { num: 5, label: 'Price', icon: 'cash' },
 ];
 
-const CATEGORIES: CategoryType[] = ['apartment', 'office', 'shop', 'airbnb'];
+const CATEGORIES: CategoryType[] = ['apartment', 'hostel', 'shop', 'airbnb'];
 const PERIODS = ['month', 'day', 'week', 'year'];
 
 export default function AddPropertyScreen() {

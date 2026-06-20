@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useRef } from 'react';
+import { useRouter } from 'expo-router';
 
 interface User {
   id: string;
@@ -12,6 +13,7 @@ interface AuthContextType {
   user: User | null;
   isGuest: boolean;
   isLandlord: boolean;
+  // kept for compatibility with AuthScreen
   showAuthModal: boolean;
   authModalMessage: string;
   signIn: (email: string, password: string) => Promise<void>;
@@ -25,14 +27,13 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [authModalMessage, setAuthModalMessage] = useState('');
+  const routerRef = useRef<ReturnType<typeof useRouter> | null>(null);
 
   const isGuest = user === null;
   const isLandlord = user?.isLandlord ?? false;
 
   const signIn = useCallback(async (email: string, _password: string) => {
-    // Mocked auth — replace with real API call
     await new Promise(resolve => setTimeout(resolve, 1000));
     setUser({
       id: 'u1',
@@ -41,26 +42,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       avatar: 'https://i.pravatar.cc/150?img=10',
       isLandlord: false,
     });
-    setShowAuthModal(false);
   }, []);
 
   const signOut = useCallback(() => {
     setUser(null);
   }, []);
 
-  /**
-   * Call before any gated action.
-   * Returns true if user is authenticated, false if modal was shown.
-   */
   const requireAuth = useCallback((message = 'Sign in to continue') => {
     if (user) return true;
     setAuthModalMessage(message);
-    setShowAuthModal(true);
+    routerRef.current?.push('/screens/auth' as any);
     return false;
   }, [user]);
 
   const dismissAuthModal = useCallback(() => {
-    setShowAuthModal(false);
+    routerRef.current?.back();
   }, []);
 
   const toggleLandlordMode = useCallback(() => {
@@ -70,12 +66,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      user, isGuest, isLandlord, showAuthModal, authModalMessage,
+      user, isGuest, isLandlord,
+      showAuthModal: false,
+      authModalMessage,
       signIn, signOut, requireAuth, dismissAuthModal, toggleLandlordMode,
     }}>
+      <RouterRegistrar routerRef={routerRef} />
       {children}
     </AuthContext.Provider>
   );
+}
+
+// Tiny helper that captures the router ref inside the provider tree
+function RouterRegistrar({ routerRef }: { routerRef: React.MutableRefObject<any> }) {
+  const router = useRouter();
+  routerRef.current = router;
+  return null;
 }
 
 export function useAuth() {
