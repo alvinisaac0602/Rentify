@@ -19,7 +19,7 @@ function TabIcon({ name, activeName, focused, color }: TabIconProps) {
     <View style={styles.iconWrap}>
       <MaterialCommunityIcons
         name={focused ? activeName : name}
-        size={22}
+        size={25}
         color={focused ? Colors.primary : Colors.muted}
       />
     </View>
