@@ -3,11 +3,11 @@ import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
   Dimensions, StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import PagerView from 'react-native-pager-view';
+import PagerView from '../../components/ui/PagerView';
 import { Colors, CategoryMeta, CategoryType } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { MOCK_PROPERTIES, MOCK_LANDLORDS, formatPrice } from '../../constants/mockData';
@@ -16,6 +16,7 @@ import { TrustMeter } from '../../components/ui/TrustMeter';
 import { AmenityTag } from '../../components/ui/AmenityTag';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
+import { MapView } from '../../components/ui/MapView';
 
 const { width } = Dimensions.get('window');
 
@@ -23,6 +24,7 @@ export default function PropertyDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { requireAuth } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const property = MOCK_PROPERTIES.find(p => p.id === id);
   const landlord = MOCK_LANDLORDS.find(l => l.id === property?.landlordId);
@@ -68,7 +70,10 @@ export default function PropertyDetailsScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.bg }}>
       <StatusBar barStyle="light-content" />
-      <ScrollView showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 110 + insets.bottom }}
+      >
         {/* ─── Image Carousel ──────────────────────── */}
         <View style={styles.carouselContainer}>
           <PagerView
@@ -82,12 +87,18 @@ export default function PropertyDetailsScreen() {
           </PagerView>
 
           {/* Back button */}
-          <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+          <TouchableOpacity 
+            style={[styles.backBtn, { top: Math.max(insets.top, 16) + 8 }]} 
+            onPress={() => router.back()}
+          >
             <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.white} />
           </TouchableOpacity>
 
           {/* Save button */}
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+          <TouchableOpacity 
+            style={[styles.saveBtn, { top: Math.max(insets.top, 16) + 8 }]} 
+            onPress={handleSave}
+          >
             <MaterialCommunityIcons
               name={isSaved ? 'heart' : 'heart-outline'}
               size={22}
@@ -187,20 +198,12 @@ export default function PropertyDetailsScreen() {
           {/* ─── Map Preview ─────────────────────────── */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Location</Text>
-            <View style={styles.mapPreview}>
-              <Image
-                source={{ uri: `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/32.5825,0.3476,13,0/350x160?access_token=pk.placeholder` }}
-                style={styles.mapImage}
-              />
-              <LinearGradient
-                colors={['transparent', 'rgba(248,250,252,0.8)']}
-                style={styles.mapGradient}
-              />
-              <View style={styles.mapOverlay}>
-                <MaterialCommunityIcons name="map-marker" size={20} color={Colors.danger} />
-                <Text style={styles.mapLocation}>{property.location}</Text>
-              </View>
-            </View>
+            <MapView
+              latitude={0.3476 + ((parseInt(property.id.replace(/\D/g, '') || '0', 10) % 10) * 0.002 - 0.01)}
+              longitude={32.5825 + ((parseInt(property.id.replace(/\D/g, '') || '0', 10) % 10) * 0.003 - 0.015)}
+              title={property.title}
+              locationName={property.location}
+            />
           </View>
 
           {/* ─── Trust UI ────────────────────────────── */}
@@ -253,24 +256,34 @@ export default function PropertyDetailsScreen() {
       </ScrollView>
 
       {/* ─── Sticky Action Bar ───────────────────────── */}
-      <View style={styles.actionBar}>
+      <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
+        <TouchableOpacity style={styles.chatIconBtnBottom} onPress={handleChat} activeOpacity={0.78}>
+          <MaterialCommunityIcons name="message-text" size={20} color={Colors.primary} />
+        </TouchableOpacity>
         <Button
           label="Request Viewing"
           onPress={handleViewingRequest}
           variant="outline"
           style={{ flex: 1 }}
-        />
-        <Button
-          label="Chat Owner"
-          onPress={handleChat}
-          variant="ghost"
-          style={{ flex: 1 }}
-          leftIcon={<MaterialCommunityIcons name="message-text" size={16} color={Colors.primary} />}
+          textStyle={{ fontSize: FontSize.sm }}
         />
         {property.category === 'airbnb' || property.category === 'hostel' ? (
-          <Button label="Book Now" onPress={handleBook} variant="success" style={{ flex: 1 }} />
+          <Button 
+            label="Book Now" 
+            onPress={handleBook} 
+            variant="success" 
+            style={{ flex: 1 }} 
+            textStyle={{ fontSize: FontSize.sm }}
+          />
         ) : (
-          <Button label="🚚 Moving" onPress={() => router.push('/screens/movers' as any)} variant="ghost" style={{ flex: 1 }} />
+          <Button 
+            label="Moving" 
+            onPress={() => router.push('/screens/movers' as any)} 
+            variant="ghost" 
+            style={{ flex: 1 }} 
+            leftIcon={<MaterialCommunityIcons name="truck-outline" size={16} color={Colors.primary} />}
+            textStyle={{ fontSize: FontSize.sm }}
+          />
         )}
       </View>
     </View>
@@ -377,5 +390,15 @@ const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: Colors.border,
     shadowColor: '#000', shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.08, shadowRadius: 12, elevation: 12,
+  },
+  chatIconBtnBottom: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primaryLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: Colors.primary + '20',
   },
 });

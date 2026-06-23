@@ -7,9 +7,12 @@ import { FontSize, FontWeight, Radius, Spacing } from '../../constants/theme';
 export interface FilterState {
   category: CategoryType | 'all';
   verifiedOnly: boolean;
-  furnished: boolean;
+  furnished: 'any' | 'furnished' | 'unfurnished';
   district: string;
   priceRange: 'all' | 'budget' | 'mid' | 'premium';
+  bedrooms: 'any' | 1 | 2 | 3 | '4+';
+  bathrooms: 'any' | 1 | 2 | '3+';
+  minTrustScore: number;
 }
 
 interface FilterChipsProps {
@@ -84,10 +87,10 @@ export function FilterChips({ filters, onChange }: FilterChipsProps) {
       {/* Furnished */}
       <TouchableOpacity
         activeOpacity={0.75}
-        onPress={() => toggle('furnished', !filters.furnished)}
-        style={[styles.chip, filters.furnished && styles.activeChip]}
+        onPress={() => toggle('furnished', filters.furnished === 'furnished' ? 'any' : 'furnished')}
+        style={[styles.chip, filters.furnished === 'furnished' && styles.activeChip]}
       >
-        <Text style={[styles.chipText, filters.furnished && styles.activeText]}>Furnished</Text>
+        <Text style={[styles.chipText, filters.furnished === 'furnished' && styles.activeText]}>Furnished</Text>
       </TouchableOpacity>
 
       <View style={styles.divider} />
@@ -121,6 +124,42 @@ export function FilterChips({ filters, onChange }: FilterChipsProps) {
             style={[styles.chip, active && styles.activeChip]}
           >
             <Text style={[styles.chipText, active && styles.activeText]}>📍 {d}</Text>
+          </TouchableOpacity>
+        );
+      })}
+
+      <View style={styles.divider} />
+
+      {/* Bedrooms */}
+      {([1, 2, 3, '4+'] as const).map(val => {
+        const active = filters.bedrooms === val;
+        return (
+          <TouchableOpacity
+            key={String(val)}
+            activeOpacity={0.75}
+            onPress={() => toggle('bedrooms', filters.bedrooms === val ? 'any' : val)}
+            style={[styles.chip, active && styles.activeChip]}
+          >
+            <MaterialCommunityIcons name="bed" size={12} color={active ? Colors.white : Colors.muted} />
+            <Text style={[styles.chipText, active && styles.activeText]}>{val}bd</Text>
+          </TouchableOpacity>
+        );
+      })}
+
+      <View style={styles.divider} />
+
+      {/* Bathrooms */}
+      {([1, 2, '3+'] as const).map(val => {
+        const active = filters.bathrooms === val;
+        return (
+          <TouchableOpacity
+            key={String(val)}
+            activeOpacity={0.75}
+            onPress={() => toggle('bathrooms', filters.bathrooms === val ? 'any' : val)}
+            style={[styles.chip, active && styles.activeChip]}
+          >
+            <MaterialCommunityIcons name="shower" size={12} color={active ? Colors.white : Colors.muted} />
+            <Text style={[styles.chipText, active && styles.activeText]}>{val}ba</Text>
           </TouchableOpacity>
         );
       })}

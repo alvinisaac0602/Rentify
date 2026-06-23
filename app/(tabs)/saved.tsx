@@ -85,7 +85,7 @@ export default function SavedScreen() {
           <TouchableOpacity
             style={styles.exploreBtn}
             activeOpacity={0.85}
-            onPress={() => router.push('/explore')}
+            onPress={() => router.push('/explore' as any)}
           >
             <Text style={styles.exploreBtnText}>Browse Listings</Text>
           </TouchableOpacity>

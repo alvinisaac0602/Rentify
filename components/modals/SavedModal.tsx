@@ -22,7 +22,7 @@ export function SavedModal({
 
   const handleGoToSaved = () => {
     onClose();
-    router.push('/saved');
+    router.push('/saved' as any);
   };
 
   return (

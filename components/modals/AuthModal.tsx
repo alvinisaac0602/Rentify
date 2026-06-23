@@ -3,7 +3,7 @@ import {
   Modal, View, Text, StyleSheet, TouchableOpacity,
   TextInput, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
@@ -23,6 +23,16 @@ export function AuthModal() {
     setLoading(true);
     try {
       await signIn(email, password);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      // In production: use expo-apple-authentication
+      await signIn('apple.user@icloud.com', 'apple-token');
     } finally {
       setLoading(false);
     }
@@ -60,15 +70,21 @@ export function AuthModal() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* Google Button */}
-            <TouchableOpacity style={styles.googleBtn} activeOpacity={0.82}>
-              <Text style={styles.googleIcon}>G</Text>
-              <Text style={styles.googleText}>Continue with Google</Text>
-            </TouchableOpacity>
+            {/* Social Sign-in Row */}
+            <View style={styles.socialRow}>
+              <TouchableOpacity style={styles.googleBtn} activeOpacity={0.82}>
+                <AntDesign name="google" size={20} color="#4285F4" />
+                <Text style={styles.googleText}>Google</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.appleBtn} onPress={handleAppleSignIn} activeOpacity={0.85}>
+                <AntDesign name="apple" size={20} color={Colors.white} />
+                <Text style={styles.appleText}>Apple</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
+              <Text style={styles.dividerText}>or continue with email</Text>
               <View style={styles.dividerLine} />
             </View>
 
@@ -77,7 +93,7 @@ export function AuthModal() {
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Full Name</Text>
                 <View style={styles.inputWrapper}>
-                  <MaterialCommunityIcons name="account" size={18} color={Colors.muted} />
+                  <MaterialCommunityIcons name="account-outline" size={20} color={Colors.muted} />
                   <TextInput
                     value={name}
                     onChangeText={setName}
@@ -93,7 +109,7 @@ export function AuthModal() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Email</Text>
               <View style={styles.inputWrapper}>
-                <MaterialCommunityIcons name="email" size={18} color={Colors.muted} />
+                <MaterialCommunityIcons name="email-outline" size={20} color={Colors.muted} />
                 <TextInput
                   value={email}
                   onChangeText={setEmail}
@@ -110,7 +126,7 @@ export function AuthModal() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Password</Text>
               <View style={styles.inputWrapper}>
-                <MaterialCommunityIcons name="lock" size={18} color={Colors.muted} />
+                <MaterialCommunityIcons name="lock-outline" size={20} color={Colors.muted} />
                 <TextInput
                   value={password}
                   onChangeText={setPassword}
@@ -120,7 +136,7 @@ export function AuthModal() {
                   style={[styles.input, { flex: 1 }]}
                 />
                 <TouchableOpacity onPress={() => setShowPass(v => !v)}>
-                  <MaterialCommunityIcons name={showPass ? 'eye-off' : 'eye'} size={18} color={Colors.muted} />
+                  <MaterialCommunityIcons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.muted} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -199,28 +215,24 @@ const styles = StyleSheet.create({
     color: Colors.muted,
     marginTop: 4,
   },
-  googleBtn: {
+  socialRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: Spacing.sm,
-    padding: 13,
-    borderRadius: Radius.lg,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    ...Shadow.sm,
+    gap: Spacing.md,
+    marginBottom: 2,
   },
-  googleIcon: {
-    fontSize: FontSize.lg,
-    fontWeight: FontWeight.bold,
-    color: '#4285F4',
+  googleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
+    borderWidth: 1.5, borderColor: Colors.border,
+    backgroundColor: Colors.surface, ...Shadow.sm,
   },
-  googleText: {
-    fontSize: FontSize.base,
-    fontWeight: FontWeight.semibold,
-    color: Colors.text,
+  googleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.text },
+  appleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
+    backgroundColor: '#000000', ...Shadow.sm,
   },
+  appleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.white },
   dividerRow: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
@@ -27,6 +27,17 @@ export default function AuthScreen() {
     setLoading(true);
     try {
       await signIn(email, password);
+      router.back();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      // In production: use expo-apple-authentication
+      await signIn('apple.user@icloud.com', 'apple-token');
       router.back();
     } finally {
       setLoading(false);
@@ -71,11 +82,17 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {/* Google */}
-          <TouchableOpacity style={styles.googleBtn} activeOpacity={0.82}>
-            <Text style={styles.googleIcon}>G</Text>
-            <Text style={styles.googleText}>Continue with Google</Text>
-          </TouchableOpacity>
+          {/* Social Buttons Row */}
+          <View style={styles.socialRow}>
+            <TouchableOpacity style={styles.googleBtn} activeOpacity={0.82}>
+              <AntDesign name="google" size={20} color="#4285F4" />
+              <Text style={styles.googleText}>Google</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.appleBtn} onPress={handleAppleSignIn} activeOpacity={0.85}>
+              <AntDesign name="apple" size={20} color={Colors.white} />
+              <Text style={styles.appleText}>Apple</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.dividerRow}>
             <View style={styles.dividerLine} />
@@ -88,7 +105,7 @@ export default function AuthScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>Full Name</Text>
               <View style={styles.inputWrapper}>
-                <MaterialCommunityIcons name="account" size={18} color={Colors.muted} />
+                <MaterialCommunityIcons name="account-outline" size={20} color={Colors.muted} />
                 <TextInput
                   value={name}
                   onChangeText={setName}
@@ -104,7 +121,7 @@ export default function AuthScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Email</Text>
             <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="email" size={18} color={Colors.muted} />
+              <MaterialCommunityIcons name="email-outline" size={20} color={Colors.muted} />
               <TextInput
                 value={email}
                 onChangeText={setEmail}
@@ -121,7 +138,7 @@ export default function AuthScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.inputLabel}>Password</Text>
             <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="lock" size={18} color={Colors.muted} />
+              <MaterialCommunityIcons name="lock-outline" size={20} color={Colors.muted} />
               <TextInput
                 value={password}
                 onChangeText={setPassword}
@@ -131,7 +148,7 @@ export default function AuthScreen() {
                 style={[styles.input, { flex: 1 }]}
               />
               <TouchableOpacity onPress={() => setShowPass(v => !v)}>
-                <MaterialCommunityIcons name={showPass ? 'eye-off' : 'eye'} size={18} color={Colors.muted} />
+                <MaterialCommunityIcons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.muted} />
               </TouchableOpacity>
             </View>
           </View>
@@ -201,14 +218,23 @@ const styles = StyleSheet.create({
     padding: Spacing.md, marginBottom: Spacing.md,
   },
   messageText: { fontSize: FontSize.sm, color: Colors.primary, flex: 1, fontWeight: FontWeight.medium },
+  socialRow: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
   googleBtn: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
     borderWidth: 1.5, borderColor: Colors.border,
     backgroundColor: Colors.surface, ...Shadow.sm,
   },
-  googleIcon: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: '#4285F4' },
   googleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.text },
+  appleBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
+    backgroundColor: '#000000', ...Shadow.sm,
+  },
+  appleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.white },
   dividerRow: {
     flexDirection: 'row', alignItems: 'center',
     gap: Spacing.sm, marginVertical: Spacing.base,
