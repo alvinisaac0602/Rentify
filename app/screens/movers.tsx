@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
@@ -8,13 +9,14 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
-import { MOCK_MOVERS } from '../../constants/mockData';
+import { MOVER_PROVIDERS } from '../../constants/mockData';
 
 export default function MoversScreen() {
   const router = useRouter();
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar style="auto" />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.text} />
@@ -27,7 +29,7 @@ export default function MoversScreen() {
         <Text style={styles.title}>Need Help Moving In? 🚚</Text>
         <Text style={styles.subtitle}>Choose a verified mover near you</Text>
 
-        {MOCK_MOVERS.map(mover => (
+        {MOVER_PROVIDERS.map(mover => (
           <View key={mover.id} style={styles.moverCard}>
             <View style={styles.moverLeft}>
               <View style={styles.moverAvatar}>

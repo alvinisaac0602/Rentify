@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput,
-  KeyboardAvoidingView, Platform, ScrollView,
+  KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
@@ -17,35 +18,39 @@ export default function AuthScreen() {
   const { signIn, authModalMessage } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPass, setShowPass] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email || !password) return;
-    setLoading(true);
-    try {
-      await signIn(email, password);
-      router.back();
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAppleSignIn = async () => {
-    setLoading(true);
-    try {
-      // In production: use expo-apple-authentication
-      await signIn('apple.user@icloud.com', 'apple-token');
-      router.back();
-    } finally {
-      setLoading(false);
+    if (mode === 'login') {
+      if (!email) return;
+      setLoading(true);
+      try {
+        await signIn(email);
+        router.back();
+      } catch (err: any) {
+        Alert.alert("Sign In Error", err.message || "Failed to sign in. Please verify your internet connection or email.");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      if (!username || !email || !phone) return;
+      setLoading(true);
+      try {
+        await signIn(email, undefined, username, phone);
+        router.back();
+      } catch (err: any) {
+        Alert.alert("Registration Error", err.message || "Failed to register. Please check your credentials.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar style="auto" />
       {/* Header */}
       <View style={styles.topBar}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
@@ -55,7 +60,7 @@ export default function AuthScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.body}
@@ -82,35 +87,18 @@ export default function AuthScreen() {
             </View>
           )}
 
-          {/* Social Buttons Row */}
-          <View style={styles.socialRow}>
-            <TouchableOpacity style={styles.googleBtn} activeOpacity={0.82}>
-              <AntDesign name="google" size={20} color="#4285F4" />
-              <Text style={styles.googleText}>Google</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.appleBtn} onPress={handleAppleSignIn} activeOpacity={0.85}>
-              <AntDesign name="apple" size={20} color={Colors.white} />
-              <Text style={styles.appleText}>Apple</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Name (register) */}
+          {/* Username (register) */}
           {mode === 'register' && (
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Full Name</Text>
+              <Text style={styles.inputLabel}>Username</Text>
               <View style={styles.inputWrapper}>
                 <MaterialCommunityIcons name="account-outline" size={20} color={Colors.muted} />
                 <TextInput
-                  value={name}
-                  onChangeText={setName}
-                  placeholder="John Doe"
+                  value={username}
+                  onChangeText={setUsername}
+                  placeholder="e.g. johndoe"
                   placeholderTextColor={Colors.placeholder}
+                  autoCapitalize="none"
                   style={styles.input}
                 />
               </View>
@@ -134,31 +122,30 @@ export default function AuthScreen() {
             </View>
           </View>
 
-          {/* Password */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Password</Text>
-            <View style={styles.inputWrapper}>
-              <MaterialCommunityIcons name="lock-outline" size={20} color={Colors.muted} />
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                placeholderTextColor={Colors.placeholder}
-                secureTextEntry={!showPass}
-                style={[styles.input, { flex: 1 }]}
-              />
-              <TouchableOpacity onPress={() => setShowPass(v => !v)}>
-                <MaterialCommunityIcons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.muted} />
-              </TouchableOpacity>
+          {/* Phone Number (register) */}
+          {mode === 'register' && (
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>Phone Number</Text>
+              <View style={styles.inputWrapper}>
+                <MaterialCommunityIcons name="phone-outline" size={20} color={Colors.muted} />
+                <TextInput
+                  value={phone}
+                  onChangeText={setPhone}
+                  placeholder="e.g. +1 234 567 8900"
+                  placeholderTextColor={Colors.placeholder}
+                  keyboardType="phone-pad"
+                  style={styles.input}
+                />
+              </View>
             </View>
-          </View>
+          )}
 
           <Button
             label={loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
             onPress={handleSubmit}
             loading={loading}
             fullWidth
-            style={{ marginTop: Spacing.sm, marginBottom: Spacing.md }}
+            style={{ marginTop: Spacing.md, marginBottom: Spacing.md }}
           />
 
           <TouchableOpacity onPress={() => setMode(m => m === 'login' ? 'register' : 'login')}>
@@ -218,29 +205,6 @@ const styles = StyleSheet.create({
     padding: Spacing.md, marginBottom: Spacing.md,
   },
   messageText: { fontSize: FontSize.sm, color: Colors.primary, flex: 1, fontWeight: FontWeight.medium },
-  socialRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-  },
-  googleBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
-    borderWidth: 1.5, borderColor: Colors.border,
-    backgroundColor: Colors.surface, ...Shadow.sm,
-  },
-  googleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.text },
-  appleBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
-    backgroundColor: '#000000', ...Shadow.sm,
-  },
-  appleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.white },
-  dividerRow: {
-    flexDirection: 'row', alignItems: 'center',
-    gap: Spacing.sm, marginVertical: Spacing.base,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { fontSize: FontSize.sm, color: Colors.muted },
   inputGroup: { marginBottom: Spacing.md },
   inputLabel: {
     fontSize: FontSize.sm, fontWeight: FontWeight.semibold,

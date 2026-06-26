@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, Image, TouchableOpacity,
-  Dimensions, StatusBar,
+  Dimensions, StatusBar, Alert, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,7 +10,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import PagerView from '../../components/ui/PagerView';
 import { Colors, CategoryMeta, CategoryType } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
-import { MOCK_PROPERTIES, MOCK_LANDLORDS, formatPrice } from '../../constants/mockData';
+import { Property, Landlord, formatPrice } from '../../constants/mockData';
 import { TrustBadge } from '../../components/ui/TrustBadge';
 import { TrustMeter } from '../../components/ui/TrustMeter';
 import { AmenityTag } from '../../components/ui/AmenityTag';
@@ -26,11 +26,105 @@ export default function PropertyDetailsScreen() {
   const { requireAuth } = useAuth();
   const insets = useSafeAreaInsets();
 
-  const property = MOCK_PROPERTIES.find(p => p.id === id);
-  const landlord = MOCK_LANDLORDS.find(l => l.id === property?.landlordId);
-
+  const [property, setProperty] = useState<Property | null>(null);
+  const [landlord, setLandlord] = useState<Landlord | null>(null);
+  const [loading, setLoading] = useState(true);
   const [activeImage, setActiveImage] = useState(0);
   const [isSaved, setIsSaved] = useState(false);
+
+  useEffect(() => {
+    const loadProperty = async () => {
+      if (!id) return;
+      setLoading(true);
+
+      try {
+        const { getDoc, doc } = require('firebase/firestore');
+        const { db } = require('../../config/firebase');
+        const docRef = doc(db, 'properties', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const propData = {
+            id: docSnap.id,
+            title: data.title || '',
+            description: data.description || '',
+            price: data.price || 0,
+            currency: data.currency || 'UGX',
+            pricePeriod: data.pricePeriod || 'month',
+            location: data.location || '',
+            category: data.category || 'apartment',
+            bedrooms: data.bedrooms,
+            bathrooms: data.bathrooms,
+            isAvailable: data.isAvailable !== undefined ? data.isAvailable : true,
+            isFurnished: !!data.isFurnished,
+            images: Array.isArray(data.images) && data.images.length > 0 ? data.images : ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?w=800&q=80'],
+            landlordId: data.landlordId || '',
+            isVerified: !!data.isVerified,
+            rating: data.rating || 0,
+            reviewCount: data.reviewCount || 0,
+            trustScore: data.trustScore || 85,
+            amenities: Array.isArray(data.amenities) ? data.amenities : [],
+            latitude: data.latitude || undefined,
+            longitude: data.longitude || undefined,
+            createdAt: data.createdAt || new Date().toISOString(),
+          } as any;
+          setProperty(propData);
+
+          // Prefetch images immediately for instant transition
+          if (Array.isArray(propData.images)) {
+            propData.images.forEach((img: string) => {
+              if (img) Image.prefetch(img).catch(() => {});
+            });
+          }
+
+          const userRef = doc(db, 'users', propData.landlordId);
+          const userSnap = await getDoc(userRef);
+          if (userSnap.exists()) {
+            const userData = userSnap.data();
+            setLandlord({
+              id: propData.landlordId,
+              name: userData.name || 'Landlord',
+              avatar: userData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+              isVerified: userData.isVerified || false,
+              rating: 4.8,
+              responseTime: 'within an hour',
+              properties: 1,
+              joinedDate: 'June 2026',
+              phone: userData.phone || '+256 700 000000',
+              trustScore: 85,
+            });
+          } else {
+            setLandlord({
+              id: propData.landlordId,
+              name: 'Verified Landlord',
+              avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+              isVerified: true,
+              rating: 4.8,
+              responseTime: 'within an hour',
+              properties: 1,
+              joinedDate: 'June 2026',
+              phone: '+256 700 000000',
+              trustScore: 90,
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching property detail:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProperty();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <View style={[styles.errorContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   if (!property || !landlord) {
     return (
@@ -65,6 +159,44 @@ export default function PropertyDetailsScreen() {
   const handleBook = () => {
     if (!requireAuth('Sign in to book this space')) return;
     router.push(`/screens/booking?propertyTitle=${encodeURIComponent(property.title)}&price=${encodeURIComponent(formatPrice(property.price, property.currency, property.pricePeriod))}` as any);
+  };
+
+  const showReportSubmitted = () => {
+    Alert.alert(
+      "Report Submitted",
+      "Thank you for flagging this listing. Our moderation team will investigate this property and take action within 24 hours."
+    );
+  };
+
+  const handleReportListing = () => {
+    Alert.alert(
+      "Report Listing",
+      "Please select a reason for reporting this listing:",
+      [
+        { text: "Spam or Duplicate", onPress: showReportSubmitted },
+        { text: "Fraudulent or Scam", onPress: showReportSubmitted },
+        { text: "Inappropriate Content", onPress: showReportSubmitted },
+        { text: "Cancel", style: "cancel" }
+      ]
+    );
+  };
+
+  const handleBlockLandlord = () => {
+    Alert.alert(
+      "Block Owner",
+      `Are you sure you want to block ${landlord.name}? You will no longer see properties listed by them.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Block", 
+          style: "destructive", 
+          onPress: () => {
+            Alert.alert("Landlord Blocked", `${landlord.name} has been blocked.`);
+            router.back();
+          } 
+        }
+      ]
+    );
   };
 
   return (
@@ -199,8 +331,8 @@ export default function PropertyDetailsScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Location</Text>
             <MapView
-              latitude={0.3476 + ((parseInt(property.id.replace(/\D/g, '') || '0', 10) % 10) * 0.002 - 0.01)}
-              longitude={32.5825 + ((parseInt(property.id.replace(/\D/g, '') || '0', 10) % 10) * 0.003 - 0.015)}
+              latitude={property.latitude ?? (0.3476 + ((parseInt(property.id.replace(/\D/g, '') || '0', 10) % 10) * 0.002 - 0.01))}
+              longitude={property.longitude ?? (32.5825 + ((parseInt(property.id.replace(/\D/g, '') || '0', 10) % 10) * 0.003 - 0.015))}
               title={property.title}
               locationName={property.location}
             />
@@ -218,6 +350,10 @@ export default function PropertyDetailsScreen() {
               {property.rating >= 4.5 && <TrustBadge type="top_rated" />}
             </View>
             <TrustMeter score={property.trustScore} />
+            <TouchableOpacity style={styles.reportRow} onPress={handleReportListing} activeOpacity={0.7}>
+              <MaterialCommunityIcons name="flag-outline" size={16} color={Colors.danger} />
+              <Text style={styles.reportText}>Report this listing</Text>
+            </TouchableOpacity>
           </View>
 
           {/* ─── Landlord Card ───────────────────────── */}
@@ -238,9 +374,14 @@ export default function PropertyDetailsScreen() {
                 <Text style={styles.responseText}>Responds {landlord.responseTime}</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.chatIconBtn} onPress={handleChat}>
-              <MaterialCommunityIcons name="message-text" size={20} color={Colors.primary} />
-            </TouchableOpacity>
+            <View style={{ gap: Spacing.sm, alignItems: 'center' }}>
+              <TouchableOpacity style={styles.chatIconBtn} onPress={handleChat}>
+                <MaterialCommunityIcons name="message-text" size={20} color={Colors.primary} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.blockIconBtn} onPress={handleBlockLandlord}>
+                <MaterialCommunityIcons name="account-cancel-outline" size={20} color={Colors.danger} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* ─── Fraud Warning for unverified ────────── */}
@@ -258,21 +399,23 @@ export default function PropertyDetailsScreen() {
       {/* ─── Sticky Action Bar ───────────────────────── */}
       <View style={[styles.actionBar, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]}>
         <TouchableOpacity style={styles.chatIconBtnBottom} onPress={handleChat} activeOpacity={0.78}>
-          <MaterialCommunityIcons name="message-text" size={20} color={Colors.primary} />
+          <MaterialCommunityIcons name="message-text-outline" size={22} color={Colors.primary} />
         </TouchableOpacity>
         <Button
-          label="Request Viewing"
+          label="Request"
           onPress={handleViewingRequest}
           variant="outline"
           style={{ flex: 1 }}
+          leftIcon={<MaterialCommunityIcons name="calendar-clock" size={16} color={Colors.primary} />}
           textStyle={{ fontSize: FontSize.sm }}
         />
         {property.category === 'airbnb' || property.category === 'hostel' ? (
           <Button 
-            label="Book Now" 
+            label="Book" 
             onPress={handleBook} 
             variant="success" 
             style={{ flex: 1 }} 
+            leftIcon={<MaterialCommunityIcons name="lightning-bolt" size={16} color={Colors.white} />}
             textStyle={{ fontSize: FontSize.sm }}
           />
         ) : (
@@ -281,7 +424,7 @@ export default function PropertyDetailsScreen() {
             onPress={() => router.push('/screens/movers' as any)} 
             variant="ghost" 
             style={{ flex: 1 }} 
-            leftIcon={<MaterialCommunityIcons name="truck-outline" size={16} color={Colors.primary} />}
+            leftIcon={<MaterialCommunityIcons name="truck-delivery-outline" size={16} color={Colors.primary} />}
             textStyle={{ fontSize: FontSize.sm }}
           />
         )}
@@ -363,6 +506,14 @@ const styles = StyleSheet.create({
     borderRadius: Radius.xl, ...Shadow.sm,
   },
   trustBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  reportRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: Spacing.md, paddingTop: Spacing.sm,
+    borderTopWidth: 1, borderTopColor: Colors.border,
+  },
+  reportText: {
+    fontSize: FontSize.sm, color: Colors.danger, fontWeight: FontWeight.semibold,
+  },
   landlordCard: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
     backgroundColor: Colors.surface, padding: Spacing.md, borderRadius: Radius.xl, ...Shadow.sm,
@@ -376,6 +527,10 @@ const styles = StyleSheet.create({
   chatIconBtn: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
+  },
+  blockIconBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: Colors.dangerLight, alignItems: 'center', justifyContent: 'center',
   },
   fraudBanner: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,

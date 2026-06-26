@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -37,7 +38,11 @@ export default function ViewingRequestScreen() {
       </View>
 
       {!sent ? (
-        <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Request a Viewing 📅</Text>
           {propertyTitle && (
             <Text style={styles.subtitle} numberOfLines={2}>{propertyTitle}</Text>
@@ -74,7 +79,8 @@ export default function ViewingRequestScreen() {
             disabled={!selectedTime}
             fullWidth
           />
-        </ScrollView>
+          </ScrollView>
+        </KeyboardAvoidingView>
       ) : (
         <View style={styles.successContainer}>
           <View style={styles.successIcon}>

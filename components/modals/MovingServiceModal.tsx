@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { Button } from '../ui/Button';
-import { Mover, MOCK_MOVERS } from '../../constants/mockData';
+import { Mover, MOVER_PROVIDERS } from '../../constants/mockData';
 
 interface MovingServiceModalProps {
   visible: boolean;
@@ -24,7 +24,7 @@ export function MovingServiceModal({ visible, onClose, onBook }: MovingServiceMo
           <Text style={styles.subtitle}>Choose a verified mover near you</Text>
         </View>
 
-        {MOCK_MOVERS.map(mover => (
+        {MOVER_PROVIDERS.map(mover => (
           <View key={mover.id} style={styles.moverCard}>
             <View style={styles.moverLeft}>
               <View style={styles.moverAvatar}>

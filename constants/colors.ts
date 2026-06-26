@@ -1,5 +1,13 @@
 // Rentify Design System — Color Tokens
 
+let activeTheme: 'light' | 'dark' = 'light';
+
+export const setThemeState = (theme: 'light' | 'dark') => {
+  activeTheme = theme;
+};
+
+export const getThemeState = () => activeTheme;
+
 export const Colors = {
   // ─── Category Colors ─────────────────────────────────────────
   apartment: '#2563EB',      // Blue
@@ -19,9 +27,9 @@ export const Colors = {
   airbnbDark: '#15803D',
 
   // ─── Brand ───────────────────────────────────────────────────
-  primary: '#1A56DB',
-  primaryLight: '#EBF5FF',
-  primaryDark: '#1239A1',
+  get primary() { return activeTheme === 'light' ? '#1A56DB' : '#3B82F6'; },
+  get primaryLight() { return activeTheme === 'light' ? '#EBF5FF' : '#1E293B'; },
+  get primaryDark() { return activeTheme === 'light' ? '#1239A1' : '#60A5FA'; },
 
   // ─── Status ──────────────────────────────────────────────────
   success: '#22C55E',
@@ -34,23 +42,23 @@ export const Colors = {
   trustLight: '#E0F2FE',
 
   // ─── Neutrals ────────────────────────────────────────────────
-  white: '#FFFFFF',
-  bg: '#F8FAFC',
-  surface: '#FFFFFF',
-  surfaceSecondary: '#F1F5F9',
-  border: '#E2E8F0',
-  borderLight: '#F1F5F9',
+  get white() { return activeTheme === 'light' ? '#FFFFFF' : '#1E293B'; },
+  get bg() { return activeTheme === 'light' ? '#F8FAFC' : '#0F172A'; },
+  get surface() { return activeTheme === 'light' ? '#FFFFFF' : '#1E293B'; },
+  get surfaceSecondary() { return activeTheme === 'light' ? '#F1F5F9' : '#334155'; },
+  get border() { return activeTheme === 'light' ? '#E2E8F0' : '#475569'; },
+  get borderLight() { return activeTheme === 'light' ? '#F1F5F9' : '#334155'; },
 
   // ─── Text ────────────────────────────────────────────────────
-  text: '#0F172A',
-  textSecondary: '#475569',
-  muted: '#94A3B8',
-  placeholder: '#CBD5E1',
+  get text() { return activeTheme === 'light' ? '#0F172A' : '#F8FAFC'; },
+  get textSecondary() { return activeTheme === 'light' ? '#475569' : '#CBD5E1'; },
+  get muted() { return activeTheme === 'light' ? '#94A3B8' : '#64748B'; },
+  get placeholder() { return activeTheme === 'light' ? '#CBD5E1' : '#475569'; },
 
   // ─── Overlay ─────────────────────────────────────────────────
-  overlay: 'rgba(15, 23, 42, 0.55)',
-  overlayLight: 'rgba(15, 23, 42, 0.25)',
-  cardOverlay: 'rgba(15, 23, 42, 0.4)',
+  get overlay() { return activeTheme === 'light' ? 'rgba(15, 23, 42, 0.55)' : 'rgba(15, 23, 42, 0.75)'; },
+  get overlayLight() { return activeTheme === 'light' ? 'rgba(15, 23, 42, 0.25)' : 'rgba(15, 23, 42, 0.45)'; },
+  get cardOverlay() { return activeTheme === 'light' ? 'rgba(15, 23, 42, 0.4)' : 'rgba(15, 23, 42, 0.6)'; },
 };
 
 export type CategoryType = 'apartment' | 'hostel' | 'shop' | 'airbnb';

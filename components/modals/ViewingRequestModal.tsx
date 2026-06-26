@@ -1,6 +1,8 @@
+import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity, TextInput,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -32,59 +34,65 @@ export function ViewingRequestModal({ visible, onClose, onSent, propertyTitle }:
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <StatusBar style="auto" />
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose} />
-      <View style={styles.sheet}>
-        <View style={styles.handle} />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={styles.sheetWrapper}
+      >
+        <View style={styles.sheet}>
+          <View style={styles.handle} />
 
-        {!sent ? (
-          <>
-            <Text style={styles.title}>Request a Viewing 📅</Text>
-            <Text style={styles.subtitle} numberOfLines={2}>{propertyTitle}</Text>
+          {!sent ? (
+            <>
+              <Text style={styles.title}>Request a Viewing 📅</Text>
+              <Text style={styles.subtitle} numberOfLines={2}>{propertyTitle}</Text>
 
-            <Text style={styles.label}>Choose a preferred time</Text>
-            <View style={styles.timeGrid}>
-              {TIMES.map(t => (
-                <TouchableOpacity
-                  key={t}
-                  activeOpacity={0.78}
-                  onPress={() => setSelectedTime(t)}
-                  style={[styles.timeChip, selectedTime === t && styles.timeChipActive]}
-                >
-                  <Text style={[styles.timeText, selectedTime === t && styles.timeTextActive]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
+              <Text style={styles.label}>Choose a preferred time</Text>
+              <View style={styles.timeGrid}>
+                {TIMES.map(t => (
+                  <TouchableOpacity
+                    key={t}
+                    activeOpacity={0.78}
+                    onPress={() => setSelectedTime(t)}
+                    style={[styles.timeChip, selectedTime === t && styles.timeChipActive]}
+                  >
+                    <Text style={[styles.timeText, selectedTime === t && styles.timeTextActive]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.label}>Note (optional)</Text>
+              <TextInput
+                value={note}
+                onChangeText={setNote}
+                placeholder="E.g. I'm interested in 2 bedrooms only..."
+                placeholderTextColor={Colors.placeholder}
+                style={styles.noteInput}
+                multiline
+                numberOfLines={3}
+              />
+
+              <Button
+                label="Send Viewing Request"
+                onPress={handleSend}
+                disabled={!selectedTime}
+                fullWidth
+              />
+            </>
+          ) : (
+            <View style={styles.successContainer}>
+              <View style={styles.successIcon}>
+                <MaterialCommunityIcons name="send-check" size={40} color={Colors.primary} />
+              </View>
+              <Text style={styles.successTitle}>Viewing Request Sent 📩</Text>
+              <Text style={styles.successMessage}>
+                The owner will respond shortly. Check your messages for updates.
+              </Text>
             </View>
-
-            <Text style={styles.label}>Note (optional)</Text>
-            <TextInput
-              value={note}
-              onChangeText={setNote}
-              placeholder="E.g. I'm interested in 2 bedrooms only..."
-              placeholderTextColor={Colors.placeholder}
-              style={styles.noteInput}
-              multiline
-              numberOfLines={3}
-            />
-
-            <Button
-              label="Send Viewing Request"
-              onPress={handleSend}
-              disabled={!selectedTime}
-              fullWidth
-            />
-          </>
-        ) : (
-          <View style={styles.successContainer}>
-            <View style={styles.successIcon}>
-              <MaterialCommunityIcons name="send-check" size={40} color={Colors.primary} />
-            </View>
-            <Text style={styles.successTitle}>Viewing Request Sent 📩</Text>
-            <Text style={styles.successMessage}>
-              The owner will respond shortly. Check your messages for updates.
-            </Text>
-          </View>
-        )}
-      </View>
+          )}
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -94,11 +102,13 @@ const styles = StyleSheet.create({
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: Colors.overlay,
   },
-  sheet: {
+  sheetWrapper: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
+  },
+  sheet: {
     backgroundColor: Colors.surface,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,

@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,6 +15,7 @@ interface WelcomeModalProps {
 export function WelcomeModal({ visible, onExplore, onHowItWorks }: WelcomeModalProps) {
   return (
     <Modal visible={visible} animationType="fade" transparent>
+      <StatusBar style="auto" />
       <View style={styles.overlay}>
         <View style={styles.card}>
           <LinearGradient

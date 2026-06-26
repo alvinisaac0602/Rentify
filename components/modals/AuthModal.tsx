@@ -1,9 +1,10 @@
+import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity,
-  TextInput, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  TextInput, KeyboardAvoidingView, Platform, ScrollView, Alert,
 } from 'react-native';
-import { MaterialCommunityIcons, AntDesign } from '@expo/vector-icons';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../context/AuthContext';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
@@ -13,28 +14,31 @@ export function AuthModal() {
   const { showAuthModal, authModalMessage, signIn, dismissAuthModal } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
-  const [showPass, setShowPass] = useState(false);
 
   const handleSubmit = async () => {
-    if (!email || !password) return;
-    setLoading(true);
-    try {
-      await signIn(email, password);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAppleSignIn = async () => {
-    setLoading(true);
-    try {
-      // In production: use expo-apple-authentication
-      await signIn('apple.user@icloud.com', 'apple-token');
-    } finally {
-      setLoading(false);
+    if (mode === 'login') {
+      if (!email) return;
+      setLoading(true);
+      try {
+        await signIn(email);
+      } catch (err: any) {
+        Alert.alert("Sign In Error", err.message || "Failed to sign in. Please verify your internet connection or email.");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      if (!username || !email || !phone) return;
+      setLoading(true);
+      try {
+        await signIn(email, undefined, username, phone);
+      } catch (err: any) {
+        Alert.alert("Registration Error", err.message || "Failed to register. Please check your credentials.");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -45,9 +49,10 @@ export function AuthModal() {
       transparent
       onRequestClose={dismissAuthModal}
     >
+      <StatusBar style="auto" />
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={dismissAuthModal} />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.sheetWrapper}
       >
         <View style={styles.sheet}>
@@ -70,35 +75,18 @@ export function AuthModal() {
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            {/* Social Sign-in Row */}
-            <View style={styles.socialRow}>
-              <TouchableOpacity style={styles.googleBtn} activeOpacity={0.82}>
-                <AntDesign name="google" size={20} color="#4285F4" />
-                <Text style={styles.googleText}>Google</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.appleBtn} onPress={handleAppleSignIn} activeOpacity={0.85}>
-                <AntDesign name="apple" size={20} color={Colors.white} />
-                <Text style={styles.appleText}>Apple</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or continue with email</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Name (register only) */}
+            {/* Username (register only) */}
             {mode === 'register' && (
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Full Name</Text>
+                <Text style={styles.inputLabel}>Username</Text>
                 <View style={styles.inputWrapper}>
                   <MaterialCommunityIcons name="account-outline" size={20} color={Colors.muted} />
                   <TextInput
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="John Doe"
+                    value={username}
+                    onChangeText={setUsername}
+                    placeholder="e.g. johndoe"
                     placeholderTextColor={Colors.placeholder}
+                    autoCapitalize="none"
                     style={styles.input}
                   />
                 </View>
@@ -122,31 +110,30 @@ export function AuthModal() {
               </View>
             </View>
 
-            {/* Password */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>Password</Text>
-              <View style={styles.inputWrapper}>
-                <MaterialCommunityIcons name="lock-outline" size={20} color={Colors.muted} />
-                <TextInput
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="••••••••"
-                  placeholderTextColor={Colors.placeholder}
-                  secureTextEntry={!showPass}
-                  style={[styles.input, { flex: 1 }]}
-                />
-                <TouchableOpacity onPress={() => setShowPass(v => !v)}>
-                  <MaterialCommunityIcons name={showPass ? 'eye-off-outline' : 'eye-outline'} size={20} color={Colors.muted} />
-                </TouchableOpacity>
+            {/* Phone Number (register only) */}
+            {mode === 'register' && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Phone Number</Text>
+                <View style={styles.inputWrapper}>
+                  <MaterialCommunityIcons name="phone-outline" size={20} color={Colors.muted} />
+                  <TextInput
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="e.g. +1 234 567 8900"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="phone-pad"
+                    style={styles.input}
+                  />
+                </View>
               </View>
-            </View>
+            )}
 
             <Button
               label={loading ? 'Please wait…' : mode === 'login' ? 'Sign In' : 'Create Account'}
               onPress={handleSubmit}
               loading={loading}
               fullWidth
-              style={{ marginTop: Spacing.sm, marginBottom: Spacing.md }}
+              style={{ marginTop: Spacing.md, marginBottom: Spacing.md }}
             />
 
             <TouchableOpacity onPress={() => setMode(m => m === 'login' ? 'register' : 'login')}>
@@ -214,39 +201,6 @@ const styles = StyleSheet.create({
     fontSize: FontSize.sm,
     color: Colors.muted,
     marginTop: 4,
-  },
-  socialRow: {
-    flexDirection: 'row',
-    gap: Spacing.md,
-    marginBottom: 2,
-  },
-  googleBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
-    borderWidth: 1.5, borderColor: Colors.border,
-    backgroundColor: Colors.surface, ...Shadow.sm,
-  },
-  googleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.text },
-  appleBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: Spacing.sm, padding: 13, borderRadius: Radius.lg,
-    backgroundColor: '#000000', ...Shadow.sm,
-  },
-  appleText: { fontSize: FontSize.base, fontWeight: FontWeight.semibold, color: Colors.white },
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginVertical: Spacing.base,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    fontSize: FontSize.sm,
-    color: Colors.muted,
   },
   inputGroup: {
     marginBottom: Spacing.md,

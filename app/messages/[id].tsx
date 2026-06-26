@@ -1,16 +1,18 @@
-import React, { useState, useRef } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Image,
+  KeyboardAvoidingView, Platform, Image, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
-import { MOCK_CHAT, MOCK_LANDLORDS, ChatMessage } from '../../constants/mockData';
+import { ChatMessage } from '../../constants/mockData';
 import { ChatBubble } from '../../components/messaging/ChatBubble';
 import { ViewingRequestModal } from '../../components/modals/ViewingRequestModal';
+import { useAuth } from '../../context/AuthContext';
 
 const QUICK_REPLIES = [
   'Is this still available?',
@@ -23,58 +25,197 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const flatListRef = useRef<FlatList>(null);
+  const { user: currentUser } = useAuth();
 
-  const landlord = MOCK_LANDLORDS.find(l => l.id === id) ?? MOCK_LANDLORDS[0];
-  const [messages, setMessages] = useState<ChatMessage[]>(MOCK_CHAT);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState('');
   const [showViewing, setShowViewing] = useState(false);
+  const [otherUser, setOtherUser] = useState<{
+    name: string;
+    avatar: string;
+    isVerified: boolean;
+    phone?: string;
+  } | null>(null);
 
-  const sendMessage = (msg?: string) => {
+  // 1. Fetch other participant's details (landlord or tenant)
+  useEffect(() => {
+    const fetchOtherUser = async () => {
+      if (!id) return;
+      
+      // Fetch from Firestore
+      try {
+        const { getDoc, doc } = require('firebase/firestore');
+        const { db } = require('../../config/firebase');
+        const userRef = doc(db, 'users', id);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const userData = userSnap.data();
+          setOtherUser({
+            name: userData.name || 'User',
+            avatar: userData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+            isVerified: !!userData.isVerified,
+            phone: userData.phone || undefined,
+          });
+        } else {
+          setOtherUser({
+            name: 'User',
+            avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+            isVerified: false,
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching chat user details:', err);
+      }
+    };
+
+    fetchOtherUser();
+  }, [id]);
+
+  // 2. Generate Conversation ID and listen to messages in real-time
+  const conversationId = currentUser && id 
+    ? [currentUser.id, id].sort().join('_') 
+    : '';
+
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const { collection, query, where, orderBy, onSnapshot } = require('firebase/firestore');
+    const { db } = require('../../config/firebase');
+
+    const q = query(
+      collection(db, 'messages'),
+      where('conversationId', '==', conversationId),
+      orderBy('createdAt', 'asc')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot: any) => {
+      const msgs: ChatMessage[] = [];
+      snapshot.forEach((docSnap: any) => {
+        const data = docSnap.data();
+        msgs.push({
+          id: docSnap.id,
+          senderId: data.senderId,
+          text: data.text || '',
+          timestamp: data.createdAt 
+            ? new Date(data.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+            : 'Just now',
+          type: data.type || 'text',
+        });
+      });
+      
+      if (msgs.length === 0) {
+        // Default welcoming mock greeting
+        setMessages([
+          {
+            id: 'welcome',
+            senderId: id || 'system',
+            text: `Hello! Thanks for your interest. Let me know if you have any questions!`,
+            timestamp: 'Just now',
+            type: 'text',
+          }
+        ]);
+      } else {
+        setMessages(msgs);
+      }
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 150);
+    });
+
+    return () => unsubscribe();
+  }, [conversationId, id]);
+
+  const sendMessage = async (msg?: string) => {
     const content = msg ?? text.trim();
-    if (!content) return;
-    setMessages(prev => [...prev, {
-      id: `m${Date.now()}`,
-      senderId: 'me',
-      text: content,
-      timestamp: 'Just now',
-      type: 'text',
-    }]);
-    setText('');
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    if (!content || !currentUser || !conversationId) return;
+
+    try {
+      const { addDoc, collection, serverTimestamp, doc, setDoc } = require('firebase/firestore');
+      const { db } = require('../../config/firebase');
+
+      await addDoc(collection(db, 'messages'), {
+        conversationId,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        text: content,
+        createdAt: serverTimestamp(),
+        type: 'text',
+      });
+
+      // Update the main conversations summary list document
+      await setDoc(doc(db, 'conversations', conversationId), {
+        id: conversationId,
+        participants: [currentUser.id, id],
+        lastMessage: content,
+        lastMessageSenderId: currentUser.id,
+        updatedAt: serverTimestamp(),
+        propertyTitle: 'Rentify Listing',
+      }, { merge: true });
+      
+      setText('');
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (err) {
+      console.error('Error sending message:', err);
+    }
   };
 
-  const sendViewingRequest = () => {
+  const sendViewingRequest = async () => {
     setShowViewing(false);
-    setMessages(prev => [...prev, {
-      id: `m${Date.now()}`,
-      senderId: 'me',
-      text: '',
-      timestamp: 'Just now',
-      type: 'viewing_request',
-    }]);
-    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    if (!currentUser || !conversationId) return;
+
+    try {
+      const { addDoc, collection, serverTimestamp, doc, setDoc } = require('firebase/firestore');
+      const { db } = require('../../config/firebase');
+
+      await addDoc(collection(db, 'messages'), {
+        conversationId,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        text: 'Sent a viewing request calendar invite',
+        createdAt: serverTimestamp(),
+        type: 'viewing_request',
+      });
+
+      // Update the main conversations summary list document
+      await setDoc(doc(db, 'conversations', conversationId), {
+        id: conversationId,
+        participants: [currentUser.id, id],
+        lastMessage: '📆 Requested a property viewing',
+        lastMessageSenderId: currentUser.id,
+        updatedAt: serverTimestamp(),
+        propertyTitle: 'Rentify Listing',
+      }, { merge: true });
+
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (err) {
+      console.error('Error sending viewing request:', err);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar style="auto" />
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.text} />
         </TouchableOpacity>
-        <Image source={{ uri: landlord.avatar }} style={styles.avatar} />
+        <Image source={{ uri: otherUser?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80' }} style={styles.avatar} />
         <View style={styles.headerInfo}>
           <View style={styles.nameRow}>
-            <Text style={styles.name}>{landlord.name}</Text>
-            {landlord.isVerified && (
+            <Text style={styles.name}>{otherUser?.name || 'Loading...'}</Text>
+            {otherUser?.isVerified && (
               <MaterialCommunityIcons name="shield-check" size={14} color={Colors.trust} />
             )}
           </View>
           <Text style={styles.activeStatus}>● Active now</Text>
         </View>
-        <TouchableOpacity style={styles.callBtn}>
-          <MaterialCommunityIcons name="phone" size={20} color={Colors.primary} />
-        </TouchableOpacity>
+        {otherUser?.phone && (
+          <TouchableOpacity style={styles.callBtn} onPress={() => {
+            const { Linking } = require('react-native');
+            Linking.openURL(`tel:${otherUser.phone}`).catch(() => Alert.alert('Error', 'Unable to place call.'));
+          }}>
+            <MaterialCommunityIcons name="phone" size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Messages */}
@@ -88,7 +229,7 @@ export default function ChatScreen() {
         renderItem={({ item }) => (
           <ChatBubble
             text={item.text}
-            isMe={item.senderId === 'me'}
+            isMe={item.senderId === currentUser?.id}
             timestamp={item.timestamp}
             type={item.type}
           />

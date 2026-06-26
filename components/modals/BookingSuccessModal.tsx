@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { Modal, View, Text, StyleSheet } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,6 +15,7 @@ interface BookingSuccessModalProps {
 export function BookingSuccessModal({ visible, onClose, onViewMessages }: BookingSuccessModalProps) {
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <StatusBar style="auto" />
       <View style={styles.overlay}>
         <View style={styles.card}>
           <Text style={styles.confetti}>🎉</Text>

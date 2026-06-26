@@ -1,18 +1,19 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList,
+  View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors, CategoryType } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
-import { MOCK_PROPERTIES, DISTRICTS } from '../../constants/mockData';
+import { DISTRICTS, Property } from '../../constants/mockData';
 import { FilterChips, FilterState } from '../../components/ui/FilterChips';
 import { PropertyCard } from '../../components/ui/PropertyCard';
 import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { FilterModal, DEFAULT_FILTERS, countActiveFilters } from '../../components/modals/FilterModal';
+import { fetchProperties } from '../../services/firebaseServices';
 
 const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
   all: [0, Infinity],
@@ -22,31 +23,78 @@ const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
 };
 
 export default function ExploreScreen() {
-  const params = useLocalSearchParams<{ q?: string; category?: string }>();
+  const params = useLocalSearchParams<{
+    q?: string;
+    category?: string;
+    verifiedOnly?: string;
+    furnished?: string;
+    district?: string;
+    priceRange?: string;
+    bedrooms?: string;
+    bathrooms?: string;
+    minTrustScore?: string;
+  }>();
   const router = useRouter();
   const { requireAuth } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState(params.q ?? '');
-  const [showFilterModal, setShowFilterModal] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     ...DEFAULT_FILTERS,
     category: (params.category as CategoryType | undefined) ?? 'all',
   });
   const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [dbProperties, setDbProperties] = useState<Property[]>([]);
 
-  useEffect(() => {
-    if (params.category) {
-      setFilters(prev => ({ ...prev, category: params.category as CategoryType | 'all' }));
+  const loadDbProperties = async () => {
+    try {
+      const result = await fetchProperties();
+      const properties = result.properties as Property[];
+      setDbProperties(properties);
+
+      // Prefetch all retrieved property images for instant navigation display
+      properties.forEach(p => {
+        if (p.images && p.images.length > 0) {
+          p.images.forEach(img => {
+            if (img) Image.prefetch(img).catch(() => {});
+          });
+        }
+      });
+    } catch (err) {
+      console.error('Error fetching Firestore properties:', err);
     }
-  }, [params.category]);
+  };
 
   useEffect(() => {
-    if (params.q !== undefined) setSearchQuery(params.q);
-  }, [params.q]);
+    loadDbProperties();
+  }, []);
+
+  useEffect(() => {
+    if (Object.keys(params).length > 0) {
+      setFilters(prev => ({
+        category: (params.category as any) ?? prev.category,
+        verifiedOnly: params.verifiedOnly !== undefined ? params.verifiedOnly === 'true' : prev.verifiedOnly,
+        furnished: (params.furnished as any) ?? prev.furnished,
+        district: params.district ?? prev.district,
+        priceRange: (params.priceRange as any) ?? prev.priceRange,
+        bedrooms: params.bedrooms !== undefined
+          ? (params.bedrooms === 'any' || params.bedrooms === '4+' ? params.bedrooms : (parseInt(params.bedrooms) as any))
+          : prev.bedrooms,
+        bathrooms: params.bathrooms !== undefined
+          ? (params.bathrooms === 'any' || params.bathrooms === '3+' ? params.bathrooms : (parseInt(params.bathrooms) as any))
+          : prev.bathrooms,
+        minTrustScore: params.minTrustScore !== undefined ? parseInt(params.minTrustScore) : prev.minTrustScore,
+      }));
+      if (params.q !== undefined) setSearchQuery(params.q);
+    }
+  }, [params]);
+
+  const allProperties = useMemo(() => {
+    return dbProperties;
+  }, [dbProperties]);
 
   const filtered = useMemo(() => {
     const [minPrice, maxPrice] = PRICE_THRESHOLDS[filters.priceRange];
-    return MOCK_PROPERTIES.filter(p => {
+    return allProperties.filter(p => {
       if (filters.category !== 'all' && p.category !== filters.category) return false;
       if (filters.verifiedOnly && !p.isVerified) return false;
       if (filters.furnished === 'furnished' && !p.isFurnished) return false;
@@ -72,7 +120,7 @@ export default function ExploreScreen() {
       }
       return true;
     });
-  }, [filters, searchQuery]);
+  }, [allProperties, filters, searchQuery]);
 
   const handleSave = (id: string) => {
     if (!requireAuth('Sign in to save properties')) return;
@@ -105,7 +153,24 @@ export default function ExploreScreen() {
           </View>
 
           {/* Filter button with badge */}
-          <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilterModal(true)} activeOpacity={0.78}>
+          <TouchableOpacity
+            style={styles.filterBtn}
+            onPress={() => router.push({
+              pathname: '/screens/filters',
+              params: {
+                category: filters.category,
+                verifiedOnly: String(filters.verifiedOnly),
+                furnished: filters.furnished,
+                district: filters.district,
+                priceRange: filters.priceRange,
+                bedrooms: String(filters.bedrooms),
+                bathrooms: String(filters.bathrooms),
+                minTrustScore: String(filters.minTrustScore),
+                from: 'explore'
+              }
+            } as any)}
+            activeOpacity={0.78}
+          >
             <MaterialCommunityIcons name="tune" size={20} color={Colors.primary} />
             {activeCount > 0 && (
               <View style={styles.badge}>
@@ -169,14 +234,6 @@ export default function ExploreScreen() {
             />
           </View>
         )}
-      />
-
-      {/* Advanced Filter Modal */}
-      <FilterModal
-        visible={showFilterModal}
-        onClose={() => setShowFilterModal(false)}
-        filters={filters}
-        onApply={setFilters}
       />
     </SafeAreaView>
   );

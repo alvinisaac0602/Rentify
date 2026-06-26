@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -24,6 +25,7 @@ export function AirbnbBookingModal({ visible, onClose, onConfirm, propertyTitle,
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <StatusBar style="auto" />
       <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={onClose} />
       <View style={styles.sheet}>
         <View style={styles.handle} />

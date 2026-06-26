@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight } from '../../constants/theme';
+import { useAuth } from '../../context/AuthContext';
+import { Avatar } from '../../components/ui/Avatar';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -30,6 +32,7 @@ export default function TabsLayout() {
   const insets = useSafeAreaInsets();
   const bottomPadding = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 16 : 8);
   const tabBarHeight = 52 + bottomPadding;
+  const { user, isGuest } = useAuth();
 
   return (
     <Tabs
@@ -89,9 +92,25 @@ export default function TabsLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ focused, color }) => (
-            <TabIcon name="account-circle-outline" activeName="account-circle" focused={focused} color={color} />
-          ),
+          tabBarIcon: ({ focused, color }) => {
+            if (!isGuest && user) {
+              return (
+                <View style={[
+                  styles.profileTabIconContainer,
+                  focused && styles.profileTabIconFocused
+                ]}>
+                  <Avatar
+                    name={user.name}
+                    uri={user.avatar}
+                    size={26}
+                  />
+                </View>
+              );
+            }
+            return (
+              <TabIcon name="account-circle-outline" activeName="account-circle" focused={focused} color={color} />
+            );
+          },
         }}
       />
       {/* Hidden from tab bar but still reachable as a route */}
@@ -131,5 +150,17 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  profileTabIconContainer: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileTabIconFocused: {
+    borderColor: Colors.primary,
   },
 });

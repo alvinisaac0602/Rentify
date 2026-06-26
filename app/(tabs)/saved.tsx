@@ -1,31 +1,93 @@
-import React, { useState } from 'react';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
-import { MOCK_PROPERTIES } from '../../constants/mockData';
+import { Property } from '../../constants/mockData';
 import { PropertyCard } from '../../components/ui/PropertyCard';
 import { useAuth } from '../../context/AuthContext';
 
 export default function SavedScreen() {
   const { isGuest, requireAuth } = useAuth();
   const router = useRouter();
-  const [savedIds, setSavedIds] = useState<string[]>(['p1', 'p9', 'p4']);
+  const [savedIds, setSavedIds] = useState<string[]>([]);
+  const [savedProperties, setSavedProperties] = useState<Property[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const savedProperties = MOCK_PROPERTIES.filter(p => savedIds.includes(p.id));
+  const loadSavedProperties = async (ids: string[]) => {
+    if (ids.length === 0) {
+      setSavedProperties([]);
+      setLoading(false);
+      return;
+    }
+    try {
+      const { doc, getDoc } = require('firebase/firestore');
+      const { db } = require('../../config/firebase');
+      const list: Property[] = [];
+      for (const id of ids) {
+        const docRef = doc(db, 'properties', id);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          list.push({
+            id: docSnap.id,
+            ...docSnap.data()
+          } as Property);
+        }
+      }
+      setSavedProperties(list);
+    } catch (e) {
+      console.log('Error fetching saved properties:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleRemove = (id: string) => {
-    setSavedIds(prev => prev.filter(x => x !== id));
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const stored = await AsyncStorage.getItem('saved_property_ids');
+        if (stored) {
+          const ids = JSON.parse(stored);
+          setSavedIds(ids);
+          await loadSavedProperties(ids);
+        } else {
+          setLoading(false);
+        }
+      } catch (e) {
+        setLoading(false);
+      }
+    };
+    if (!isGuest) {
+      init();
+    } else {
+      setLoading(false);
+    }
+  }, [isGuest]);
+
+  const handleRemove = async (id: string) => {
+    const updated = savedIds.filter(x => x !== id);
+    setSavedIds(updated);
+    await AsyncStorage.setItem('saved_property_ids', JSON.stringify(updated));
+    setSavedProperties(prev => prev.filter(p => p.id !== id));
+  };
+
+  const handleClearAll = async () => {
+    setSavedIds([]);
+    await AsyncStorage.removeItem('saved_property_ids');
+    setSavedProperties([]);
   };
 
   if (isGuest) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
+        <StatusBar style="auto" />
         <View style={{ height: Spacing.sm }} />
 
         {/* Guest Center Mode */}
@@ -57,15 +119,17 @@ export default function SavedScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="auto" />
       {/* Header */}
       <View style={styles.header}>
         <View>
+          <Text style={styles.title}>Favorites</Text>
           <Text style={styles.subtitle}>{savedProperties.length} spaces secured</Text>
         </View>
         {savedProperties.length > 0 && (
           <TouchableOpacity
             style={styles.clearBtn}
-            onPress={() => setSavedIds([])}
+            onPress={handleClearAll}
             activeOpacity={0.75}
           >
             <Text style={styles.clearText}>Clear All</Text>
@@ -73,7 +137,11 @@ export default function SavedScreen() {
         )}
       </View>
 
-      {savedProperties.length === 0 ? (
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : savedProperties.length === 0 ? (
         <View style={styles.emptyState}>
           <View style={styles.emptyIconCircle}>
             <MaterialCommunityIcons name="heart-broken-outline" size={38} color={Colors.muted} />

@@ -1,29 +1,118 @@
-import React from 'react';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { useAuth } from '../../context/AuthContext';
 import { TrustBadge } from '../../components/ui/TrustBadge';
+import { Avatar } from '../../components/ui/Avatar';
+import { uploadAvatarImage } from '../../services/firebaseServices';
+import { useTheme } from '../../context/ThemeContext';
+import { VerificationModal } from '../../components/modals/VerificationModal';
+import { FeedbackModal } from '../../components/modals/FeedbackModal';
 
 const MENU_ITEMS = [
-  { icon: 'home-city-outline', label: 'My Properties', sublabel: 'Manage your listings', action: 'landlord' },
-  { icon: 'heart-outline', label: 'Saved Properties', sublabel: 'Your favorites collection', action: 'saved' },
-  { icon: 'message-text-outline', label: 'Messages', sublabel: 'Chats with landlords & tenants', action: 'messages' },
-  { icon: 'calendar-clock-outline', label: 'Viewing Requests', sublabel: 'Upcoming viewings schedule', action: null },
-  { icon: 'shield-check-outline', label: 'Verification Status', sublabel: 'Increase your tenant trust score', action: null },
-  { icon: 'help-circle-outline', label: 'Help & Support', sublabel: 'Frequently asked questions', action: null },
-  { icon: 'information-outline', label: 'About Rentify', sublabel: 'App version 1.2.0', action: null },
+  { icon: 'home-city-outline', labelKey: 'my_properties', sublabel: 'Manage your listings', action: 'landlord' },
+  { icon: 'heart-outline', labelKey: 'saved_properties', sublabel: 'Your favorites collection', action: 'saved' },
+  { icon: 'message-text-outline', labelKey: 'messages', sublabel: 'Chats with landlords & tenants', action: 'messages' },
+  { icon: 'calendar-clock-outline', labelKey: 'viewing_requests', sublabel: 'Upcoming viewings schedule', action: null },
+  { icon: 'shield-check-outline', labelKey: 'verification_status', sublabel: 'Increase your tenant trust score', action: 'verification' },
+  { icon: 'comment-quote-outline', labelKey: 'give_feedback', sublabel: 'Share suggestions or report bugs', action: 'feedback' },
+  { icon: 'file-document-outline', labelKey: 'privacy_terms', sublabel: 'Privacy Policy & Terms of Service', action: 'legal' },
+  { icon: 'shield-alert-outline', labelKey: 'delete_account', sublabel: 'Permanently remove your account and data', action: 'delete_account' },
+  { icon: 'information-outline', labelKey: 'about_rentify', sublabel: 'App version 1.2.0', action: null },
 ];
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { user, isGuest, requireAuth, signOut, toggleLandlordMode, isLandlord } = useAuth();
+  const { user, isGuest, requireAuth, signOut, toggleLandlordMode, isLandlord, updateUserAvatar } = useAuth();
+  const { theme, toggleTheme, language, setLanguage, t } = useTheme();
+  const [uploading, setUploading] = useState(false);
+  const [showVerification, setShowVerification] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+
+  const getLanguageLabel = (lang: string) => {
+    switch (lang) {
+      case 'en': return 'English';
+      case 'es': return 'Español';
+      case 'fr': return 'Français';
+      case 'de': return 'Deutsch';
+      case 'sw': return 'Kiswahili';
+      default: return 'English';
+    }
+  };
+
+  const handleLanguagePress = () => {
+    Alert.alert(
+      t('select_language'),
+      '',
+      [
+        { text: 'English', onPress: () => setLanguage('en') },
+        { text: 'Español', onPress: () => setLanguage('es') },
+        { text: 'Français', onPress: () => setLanguage('fr') },
+        { text: 'Deutsch', onPress: () => setLanguage('de') },
+        { text: 'Kiswahili', onPress: () => setLanguage('sw') },
+        { text: t('cancel'), style: 'cancel' }
+      ]
+    );
+  };
+
+  const handlePickAvatar = async () => {
+    if (!user) return;
+
+    // Request permissions
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'We need access to your photos to update your profile photo.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets && result.assets[0].uri) {
+      const selectedUri = result.assets[0].uri;
+      setUploading(true);
+      try {
+        const downloadUrl = await uploadAvatarImage(user.id, selectedUri);
+        await updateUserAvatar(downloadUrl);
+        Alert.alert(t('success'), t('profile_photo_updated'));
+      } catch (err: any) {
+        Alert.alert('Upload Error', err.message || 'Failed to upload profile photo.');
+      } finally {
+        setUploading(false);
+      }
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      "Delete Account",
+      "Are you sure you want to permanently delete your Rentify account? This action cannot be undone, and all your listings, saved properties, and messages will be permanently deleted.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete Permanent", 
+          style: "destructive", 
+          onPress: () => {
+            signOut();
+            Alert.alert("Account Deleted", "Your account and all associated data have been permanently removed.");
+          } 
+        }
+      ]
+    );
+  };
 
   const handleMenuPress = (action: string | null) => {
     if (!action) return;
@@ -34,6 +123,15 @@ export default function ProfileScreen() {
       router.push('/saved');
     } else if (action === 'messages') {
       router.push('/messages' as any);
+    } else if (action === 'legal') {
+      router.push('/screens/legal' as any);
+    } else if (action === 'verification') {
+      if (!requireAuth('Sign in to view verification status')) return;
+      setShowVerification(true);
+    } else if (action === 'feedback') {
+      setShowFeedback(true);
+    } else if (action === 'delete_account') {
+      handleDeleteAccount();
     }
   };
 
@@ -69,18 +167,50 @@ export default function ProfileScreen() {
 
         {/* Guest basic options */}
         <View style={styles.menuSection}>
-          {MENU_ITEMS.slice(5).map(item => (
-            <TouchableOpacity key={item.label} style={styles.menuItem} onPress={() => handleMenuPress(item.action)}>
+          {MENU_ITEMS.filter(item => item.action !== 'delete_account' && item.action !== 'landlord' && item.action !== 'saved' && item.action !== 'messages').map(item => (
+            <TouchableOpacity key={item.labelKey} style={styles.menuItem} onPress={() => handleMenuPress(item.action)}>
               <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
                 <MaterialCommunityIcons name={item.icon as any} size={20} color={Colors.primary} />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuLabel}>{item.label}</Text>
+                <Text style={styles.menuLabel}>{t(item.labelKey)}</Text>
                 <Text style={styles.menuSublabel}>{item.sublabel}</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={18} color={Colors.muted} />
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* Guest Settings Options */}
+        <View style={styles.menuSection}>
+          {/* Dark Mode */}
+          <View style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
+              <MaterialCommunityIcons name="weather-night" size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuLabel}>{t('dark_mode')}</Text>
+              <Text style={styles.menuSublabel}>{theme === 'dark' ? 'Enabled' : 'Disabled'}</Text>
+            </View>
+            <Switch
+              value={theme === 'dark'}
+              onValueChange={toggleTheme}
+              trackColor={{ false: '#CBD5E1', true: Colors.primary }}
+              thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
+            />
+          </View>
+
+          {/* Language */}
+          <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={handleLanguagePress} activeOpacity={0.75}>
+            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
+              <MaterialCommunityIcons name="translate" size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuLabel}>{t('language')}</Text>
+              <Text style={styles.menuSublabel}>{getLanguageLabel(language)}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={Colors.muted} />
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
@@ -89,12 +219,8 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* Header */}
-        <View style={[styles.header, { justifyContent: 'flex-end' }]}>
-          <TouchableOpacity style={styles.cogBtn} activeOpacity={0.75}>
-            <MaterialCommunityIcons name="cog-outline" size={22} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
+        {/* Header Spacer */}
+        <View style={{ height: Spacing.md }} />
 
         {/* Profile Card */}
         <View style={styles.profileCard}>
@@ -103,10 +229,28 @@ export default function ProfileScreen() {
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
             style={styles.profileGradient}
           >
-            <Image
-              source={{ uri: user?.avatar ?? 'https://i.pravatar.cc/150?img=10' }}
-              style={styles.avatar}
-            />
+            <TouchableOpacity 
+              onPress={handlePickAvatar} 
+              activeOpacity={0.8} 
+              style={styles.avatarContainer}
+              disabled={uploading}
+            >
+              <Avatar
+                name={user?.name || ''}
+                uri={user?.avatar}
+                size={78}
+                style={styles.avatar}
+              />
+              {uploading ? (
+                <View style={[styles.editBadge, { backgroundColor: '#FFFFFF' }]}>
+                  <ActivityIndicator size="small" color={Colors.primary} />
+                </View>
+              ) : (
+                <View style={styles.editBadge}>
+                  <MaterialCommunityIcons name="camera" size={12} color={Colors.primary} />
+                </View>
+              )}
+            </TouchableOpacity>
             <Text style={styles.profileName}>{user?.name}</Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
             <View style={styles.badgeRow}>
@@ -162,7 +306,7 @@ export default function ProfileScreen() {
         <View style={styles.menuSection}>
           {MENU_ITEMS.map((item, index) => (
             <TouchableOpacity
-              key={item.label}
+              key={item.labelKey}
               style={[
                 styles.menuItem,
                 index === MENU_ITEMS.length - 1 && { borderBottomWidth: 0 }
@@ -174,12 +318,44 @@ export default function ProfileScreen() {
                 <MaterialCommunityIcons name={item.icon as any} size={20} color={Colors.primary} />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuLabel}>{item.label}</Text>
+                <Text style={styles.menuLabel}>{t(item.labelKey)}</Text>
                 <Text style={styles.menuSublabel}>{item.sublabel}</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={18} color={Colors.muted} />
             </TouchableOpacity>
           ))}
+        </View>
+
+        {/* Settings Options */}
+        <View style={styles.menuSection}>
+          {/* Dark Mode */}
+          <View style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
+              <MaterialCommunityIcons name="weather-night" size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuLabel}>{t('dark_mode')}</Text>
+              <Text style={styles.menuSublabel}>{theme === 'dark' ? 'Enabled' : 'Disabled'}</Text>
+            </View>
+            <Switch
+              value={theme === 'dark'}
+              onValueChange={toggleTheme}
+              trackColor={{ false: '#CBD5E1', true: Colors.primary }}
+              thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
+            />
+          </View>
+
+          {/* Language */}
+          <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={handleLanguagePress} activeOpacity={0.75}>
+            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
+              <MaterialCommunityIcons name="translate" size={20} color={Colors.primary} />
+            </View>
+            <View style={styles.menuContent}>
+              <Text style={styles.menuLabel}>{t('language')}</Text>
+              <Text style={styles.menuSublabel}>{getLanguageLabel(language)}</Text>
+            </View>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={Colors.muted} />
+          </TouchableOpacity>
         </View>
 
         {/* Sign Out btn */}
@@ -189,9 +365,19 @@ export default function ProfileScreen() {
           activeOpacity={0.8}
         >
           <MaterialCommunityIcons name="logout-variant" size={20} color={Colors.danger} />
-          <Text style={styles.signOutText}>Sign Out</Text>
+          <Text style={styles.signOutText}>{t('sign_out')}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <VerificationModal 
+        visible={showVerification} 
+        onClose={() => setShowVerification(false)} 
+      />
+
+      <FeedbackModal 
+        visible={showFeedback} 
+        onClose={() => setShowFeedback(false)} 
+      />
     </SafeAreaView>
   );
 }
@@ -213,7 +399,27 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
   },
   profileGradient: { alignItems: 'center', paddingTop: Spacing.xl, paddingBottom: Spacing.md, gap: Spacing.xs },
-  avatar: { width: 78, height: 78, borderRadius: 39, borderWidth: 3, borderColor: 'rgba(255,255,255,0.35)' },
+  avatarContainer: {
+    position: 'relative',
+    marginBottom: Spacing.xs,
+  },
+  avatar: { width: 78, height: 78, borderRadius: 39, borderWidth: 3, borderColor: 'rgba(255,255,255,0.7)' },
+  editBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 1.41,
+    elevation: 2,
+  },
   profileName: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white, marginTop: 4 },
   profileEmail: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.8)' },
   badgeRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },

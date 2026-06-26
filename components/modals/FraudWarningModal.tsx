@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -15,6 +16,7 @@ interface FraudWarningModalProps {
 export function FraudWarningModal({ visible, onClose, onReport, onContinue }: FraudWarningModalProps) {
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+      <StatusBar style="auto" />
       <View style={styles.overlay}>
         <View style={styles.card}>
           <View style={styles.warningIcon}>

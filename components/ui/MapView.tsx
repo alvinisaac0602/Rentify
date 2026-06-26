@@ -16,6 +16,7 @@ export function MapView({ latitude = 0.3476, longitude = 32.5825, title, locatio
   return (
     <View style={[styles.container, style]}>
       <NativeMapView
+        key={`${latitude}-${longitude}`}
         style={StyleSheet.absoluteFillObject}
         initialRegion={{
           latitude,

@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React from 'react';
 import { Modal, View, Text, StyleSheet, TouchableOpacity, Pressable } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -33,6 +34,7 @@ export function SavedModal({
       statusBarTranslucent
       onRequestClose={onClose}
     >
+      <StatusBar style="auto" />
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable style={styles.sheet} pointerEvents="auto">
           <View style={styles.dragIndicator} />

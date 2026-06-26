@@ -1,6 +1,7 @@
-import React from 'react';
+import { StatusBar } from 'expo-status-bar';
+import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, FlatList, TouchableOpacity, Image,
+  View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,22 +9,99 @@ import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
-import { MOCK_MESSAGES } from '../../constants/mockData';
+
 import { useAuth } from '../../context/AuthContext';
 
 export default function MessagesListScreen() {
   const router = useRouter();
-  const { isGuest, requireAuth } = useAuth();
+  const { user: currentUser, isGuest } = useAuth();
+  const [conversations, setConversations] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [profiles, setProfiles] = useState<Record<string, { name: string; avatar: string; isVerified: boolean }>>({});
+
+  useEffect(() => {
+    if (!currentUser) {
+      setLoading(false);
+      return;
+    }
+
+    const { collection, query, where, orderBy, onSnapshot } = require('firebase/firestore');
+    const { db } = require('../../config/firebase');
+
+    const q = query(
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', currentUser.id),
+      orderBy('updatedAt', 'desc')
+    );
+
+    const unsubscribe = onSnapshot(q, async (snapshot: any) => {
+      const list: any[] = [];
+      const userIdsToFetch: string[] = [];
+
+      snapshot.forEach((docSnap: any) => {
+        const data = docSnap.data();
+        const otherId = data.participants.find((pId: string) => pId !== currentUser.id) || '';
+        list.push({
+          id: docSnap.id,
+          otherId,
+          lastMessage: data.lastMessage || '',
+          lastMessageSenderId: data.lastMessageSenderId || '',
+          timestamp: data.updatedAt 
+            ? new Date(data.updatedAt.seconds * 1000).toLocaleDateString([], { month: 'short', day: 'numeric' })
+            : 'Just now',
+          propertyTitle: data.propertyTitle || 'Rentify Listing',
+          unread: data.lastMessageSenderId !== currentUser.id ? 1 : 0,
+        });
+
+        if (otherId && !profiles[otherId] && !userIdsToFetch.includes(otherId)) {
+          userIdsToFetch.push(otherId);
+        }
+      });
+
+      setConversations(list);
+      setLoading(false);
+
+      if (userIdsToFetch.length > 0) {
+        const { getDoc, doc } = require('firebase/firestore');
+        const newProfiles = { ...profiles };
+        for (const uId of userIdsToFetch) {
+          try {
+            const uDoc = await getDoc(doc(db, 'users', uId));
+            if (uDoc.exists()) {
+              const uData = uDoc.data();
+              newProfiles[uId] = {
+                name: uData.name || 'User',
+                avatar: uData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+                isVerified: !!uData.isVerified,
+              };
+            } else {
+              newProfiles[uId] = {
+                name: 'Verified Landlord',
+                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+                isVerified: true,
+              };
+            }
+          } catch (e) {
+            console.log('Error fetching profile:', e);
+          }
+        }
+        setProfiles(newProfiles);
+      }
+    }, (error: any) => {
+      console.log('Snapshot listener error:', error);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [currentUser]);
 
   if (isGuest) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        {/* Header */}
+        <StatusBar style="auto" />
         <View style={styles.header}>
           <Text style={styles.title}>Inbox 💬</Text>
         </View>
-
-        {/* Guest Lock Card */}
         <View style={styles.centerContainer}>
           <LinearGradient
             colors={[Colors.primaryLight, 'rgba(235, 245, 255, 0.25)']}
@@ -36,7 +114,6 @@ export default function MessagesListScreen() {
             <Text style={styles.guestSubtitle}>
               Sign in to message property owners, schedule viewings, and negotiate prices in real time.
             </Text>
-            
             <TouchableOpacity
               style={styles.signInBtn}
               activeOpacity={0.85}
@@ -52,7 +129,7 @@ export default function MessagesListScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
+      <StatusBar style="auto" />
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Inbox 💬</Text>
@@ -63,66 +140,75 @@ export default function MessagesListScreen() {
         </TouchableOpacity>
       </View>
 
-      <FlatList
-        data={MOCK_MESSAGES}
-        keyExtractor={m => m.id}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            activeOpacity={0.75}
-            onPress={() => router.push(`/messages/${item.senderId}` as any)}
-            style={[styles.messageRow, item.unread > 0 && styles.messageRowUnread]}
-          >
-            {/* Avatar & Online status indicator */}
-            <View style={styles.avatarWrapper}>
-              <Image source={{ uri: item.senderAvatar }} style={styles.avatar} />
-              <View style={styles.onlineBadge} />
-            </View>
-
-            {/* Content preview */}
-            <View style={styles.messageContent}>
-              <View style={styles.messageTop}>
-                <Text style={[styles.senderName, item.unread > 0 && styles.textBold]} numberOfLines={1}>
-                  {item.senderName}
-                </Text>
-                <Text style={styles.timestamp}>{item.timestamp}</Text>
-              </View>
-              
-              {/* Property link reference tag */}
-              <View style={styles.propertyBadge}>
-                <MaterialCommunityIcons name="office-building-outline" size={10} color={Colors.primary} />
-                <Text style={styles.propertyTitle} numberOfLines={1}>{item.propertyTitle}</Text>
-              </View>
-
-              <Text
-                style={[styles.lastMessage, item.unread > 0 && styles.lastMessageUnread]}
-                numberOfLines={1}
+      {loading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      ) : (
+        <FlatList
+          data={conversations}
+          keyExtractor={m => m.id}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item }) => {
+            const profile = profiles[item.otherId] || {
+              name: 'Loading...',
+              avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+              isVerified: false,
+            };
+            return (
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={() => router.push(`/messages/${item.otherId}` as any)}
+                style={[styles.messageRow, item.unread > 0 && styles.messageRowUnread]}
               >
-                {item.lastMessage}
+                <View style={styles.avatarWrapper}>
+                  <Image source={{ uri: profile.avatar }} style={styles.avatar} />
+                  <View style={styles.onlineBadge} />
+                </View>
+
+                <View style={styles.messageContent}>
+                  <View style={styles.messageTop}>
+                    <Text style={[styles.senderName, item.unread > 0 && styles.textBold]} numberOfLines={1}>
+                      {profile.name}
+                    </Text>
+                    <Text style={styles.timestamp}>{item.timestamp}</Text>
+                  </View>
+                  
+                  <View style={styles.propertyBadge}>
+                    <MaterialCommunityIcons name="office-building-outline" size={10} color={Colors.primary} />
+                    <Text style={styles.propertyTitle} numberOfLines={1}>{item.propertyTitle}</Text>
+                  </View>
+
+                  <Text
+                    style={[styles.lastMessage, item.unread > 0 && styles.lastMessageUnread]}
+                    numberOfLines={1}
+                  >
+                    {item.lastMessage}
+                  </Text>
+                </View>
+
+                {item.unread > 0 && (
+                  <View style={styles.unreadColumn}>
+                    <View style={styles.unreadIndicator} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={styles.emptyState}>
+              <View style={styles.emptyIconCircle}>
+                <MaterialCommunityIcons name="chat-outline" size={38} color={Colors.muted} />
+              </View>
+              <Text style={styles.emptyTitle}>No conversations yet</Text>
+              <Text style={styles.emptySubtitle}>
+                Find a property you like and tap the Message icons to start a chat.
               </Text>
             </View>
-
-            {/* Unread dot */}
-            {item.unread > 0 && (
-              <View style={styles.unreadColumn}>
-                <View style={styles.unreadIndicator} />
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
-        ListEmptyComponent={
-          <View style={styles.emptyState}>
-            <View style={styles.emptyIconCircle}>
-              <MaterialCommunityIcons name="chat-outline" size={38} color={Colors.muted} />
-            </View>
-            <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptySubtitle}>
-              Find a property you like and tap "Message Landlord" to start a chat.
-            </Text>
-          </View>
-        }
-      />
+          }
+        />
+      )}
     </SafeAreaView>
   );
 }

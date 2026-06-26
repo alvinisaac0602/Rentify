@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
-  TouchableOpacity, FlatList, RefreshControl,
+  TouchableOpacity, FlatList, RefreshControl, Image, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, CategoryType } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
-import { MOCK_PROPERTIES } from '../../constants/mockData';
+import { Property } from '../../constants/mockData';
 import { CategoryCard } from '../../components/ui/CategoryCard';
 import { PropertyCard } from '../../components/ui/PropertyCard';
 import { FilterChips, FilterState } from '../../components/ui/FilterChips';
 import { FilterModal, DEFAULT_FILTERS, countActiveFilters } from '../../components/modals/FilterModal';
 import { useWelcomeModal } from '../../hooks/useWelcomeModal';
 import { useAuth } from '../../context/AuthContext';
+import { fetchProperties } from '../../services/firebaseServices';
 
 const LOCATIONS = ['Kampala', 'Ntinda', 'Kira', 'Nakawa', 'Kololo', 'Entebbe'];
 const CATEGORIES: CategoryType[] = ['apartment', 'hostel', 'shop', 'airbnb'];
@@ -28,7 +29,7 @@ const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
   premium: [3000001, Infinity],
 };
 
-function applyFilters(properties: typeof MOCK_PROPERTIES, filters: FilterState): typeof MOCK_PROPERTIES {
+function applyFilters(properties: Property[], filters: FilterState): Property[] {
   const [minP, maxP] = PRICE_THRESHOLDS[filters.priceRange];
   return properties.filter(p => {
     if (filters.category !== 'all' && p.category !== filters.category) return false;
@@ -56,7 +57,17 @@ function applyFilters(properties: typeof MOCK_PROPERTIES, filters: FilterState):
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { requireAuth } = useAuth();
+  const params = useLocalSearchParams<{
+    category?: string;
+    verifiedOnly?: string;
+    furnished?: string;
+    district?: string;
+    priceRange?: string;
+    bedrooms?: string;
+    bathrooms?: string;
+    minTrustScore?: string;
+  }>();
+  const { user, requireAuth } = useAuth();
   const { shouldShow } = useWelcomeModal();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('Kampala');
@@ -64,23 +75,73 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [showFilterModal, setShowFilterModal] = useState(false);
+  const [dbProperties, setDbProperties] = useState<Property[]>([]);
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  // Synchronize state when params change
+  useEffect(() => {
+    if (Object.keys(params).length > 0) {
+      setFilters(prev => ({
+        category: (params.category as any) ?? prev.category,
+        verifiedOnly: params.verifiedOnly !== undefined ? params.verifiedOnly === 'true' : prev.verifiedOnly,
+        furnished: (params.furnished as any) ?? prev.furnished,
+        district: params.district ?? prev.district,
+        priceRange: (params.priceRange as any) ?? prev.priceRange,
+        bedrooms: params.bedrooms !== undefined
+          ? (params.bedrooms === 'any' || params.bedrooms === '4+' ? params.bedrooms : (parseInt(params.bedrooms) as any))
+          : prev.bedrooms,
+        bathrooms: params.bathrooms !== undefined
+          ? (params.bathrooms === 'any' || params.bathrooms === '3+' ? params.bathrooms : (parseInt(params.bathrooms) as any))
+          : prev.bathrooms,
+        minTrustScore: params.minTrustScore !== undefined ? parseInt(params.minTrustScore) : prev.minTrustScore,
+      }));
+    }
+  }, [params]);
+
+  const loadDbProperties = async () => {
+    try {
+      const result = await fetchProperties();
+      const properties = result.properties as Property[];
+      setDbProperties(properties);
+
+      // Prefetch all retrieved property images for instant navigation display
+      properties.forEach(p => {
+        if (p.images && p.images.length > 0) {
+          p.images.forEach(img => {
+            if (img) Image.prefetch(img).catch(() => {});
+          });
+        }
+      });
+    } catch (err) {
+      console.error('Error fetching Firestore properties:', err);
+    }
+  };
 
   useEffect(() => {
     AsyncStorage.getItem('onboarding_done').then(val => {
-      if (!val) router.replace('/onboarding' as any);
-      else if (shouldShow) router.push('/screens/welcome' as any);
+      if (!val) {
+        router.replace('/onboarding' as any);
+      } else {
+        setCheckingOnboarding(false);
+        if (shouldShow) {
+          router.push('/screens/welcome' as any);
+        }
+        loadDbProperties();
+      }
     });
   }, []);
 
+  const allProperties = useMemo(() => {
+    return dbProperties;
+  }, [dbProperties]);
+
   const featuredProperties = useMemo(() => {
-    const base = MOCK_PROPERTIES.filter(p => p.isVerified);
-    return applyFilters(base, filters).slice(0, 6);
-  }, [filters]);
+    return applyFilters(allProperties, filters).slice(0, 6);
+  }, [allProperties, filters]);
 
   const nearbyProperties = useMemo(() => {
-    const base = MOCK_PROPERTIES.slice(4, 8);
-    return applyFilters(base, filters);
-  }, [filters]);
+    return applyFilters(allProperties, filters).slice(6, 12);
+  }, [allProperties, filters]);
 
   const handleSearch = () => {
     const q = searchQuery.trim();
@@ -96,19 +157,31 @@ export default function HomeScreen() {
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await new Promise(r => setTimeout(r, 800));
+    await Promise.all([
+      loadDbProperties(),
+      new Promise(r => setTimeout(r, 800))
+    ]);
     setRefreshing(false);
   };
 
   const getGreeting = () => {
     const h = new Date().getHours();
-    if (h >= 5 && h < 12) return `Good morning from ${selectedLocation}! 👋`;
-    if (h >= 12 && h < 17) return `Good afternoon from ${selectedLocation}! 👋`;
-    if (h >= 17 && h < 22) return `Good evening from ${selectedLocation}! 👋`;
-    return `Good night from ${selectedLocation}! 👋`;
+    const displayName = user?.name || 'Guest';
+    if (h >= 5 && h < 12) return `Good morning, ${displayName}! 👋`;
+    if (h >= 12 && h < 17) return `Good afternoon, ${displayName}! 👋`;
+    if (h >= 17 && h < 22) return `Good evening, ${displayName}! 👋`;
+    return `Good night, ${displayName}! 👋`;
   };
 
   const activeCount = countActiveFilters(filters);
+
+  if (checkingOnboarding) {
+    return (
+      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top']}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -127,7 +200,7 @@ export default function HomeScreen() {
               <Text style={styles.greeting}>{getGreeting()}</Text>
               <Text style={styles.tagline}>Find your perfect space</Text>
             </View>
-            <TouchableOpacity style={styles.notifBtn}>
+            <TouchableOpacity style={styles.notifBtn} onPress={() => router.push('/screens/notifications' as any)}>
               <MaterialCommunityIcons name="bell-outline" size={22} color={Colors.white} />
             </TouchableOpacity>
           </View>
@@ -153,7 +226,24 @@ export default function HomeScreen() {
             </TouchableOpacity>
 
             {/* Filter button */}
-            <TouchableOpacity style={styles.filterBtn} onPress={() => setShowFilterModal(true)} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={styles.filterBtn}
+              onPress={() => router.push({
+                pathname: '/screens/filters',
+                params: {
+                  category: filters.category,
+                  verifiedOnly: String(filters.verifiedOnly),
+                  furnished: filters.furnished,
+                  district: filters.district,
+                  priceRange: filters.priceRange,
+                  bedrooms: String(filters.bedrooms),
+                  bathrooms: String(filters.bathrooms),
+                  minTrustScore: String(filters.minTrustScore),
+                  from: 'index'
+                }
+              } as any)}
+              activeOpacity={0.85}
+            >
               <MaterialCommunityIcons name="tune" size={20} color={Colors.white} />
               {activeCount > 0 && (
                 <View style={styles.badge}>
@@ -297,14 +387,6 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
-
-      {/* Advanced Filter Modal */}
-      <FilterModal
-        visible={showFilterModal}
-        onClose={() => setShowFilterModal(false)}
-        filters={filters}
-        onApply={setFilters}
-      />
     </SafeAreaView>
   );
 }

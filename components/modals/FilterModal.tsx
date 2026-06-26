@@ -1,3 +1,4 @@
+import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch,
@@ -51,6 +52,7 @@ export function FilterModal({ visible, onClose, filters, onApply, showCategoryFi
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
+      <StatusBar style="auto" />
       <View style={s.overlay}>
         <TouchableOpacity style={s.overlayDismiss} activeOpacity={1} onPress={onClose} />
         <View style={s.sheet}>
