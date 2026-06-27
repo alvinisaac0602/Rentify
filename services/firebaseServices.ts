@@ -259,13 +259,22 @@ export const uploadAvatarImage = async (userId: string, imageUri: string) => {
 // 9. Create a new property listing in Firestore
 export const createProperty = async (property: Omit<PropertyData, 'id' | 'createdAt' | 'isVerified' | 'rating' | 'reviewCount' | 'trustScore'>) => {
   const propertiesRef = collection(db, 'properties');
+  const now = new Date();
+  const expiresAt = new Date(now);
+  expiresAt.setDate(expiresAt.getDate() + 30); // Free listings expire after 30 days
+
   const docRef = await addDoc(propertiesRef, {
     ...property,
     isVerified: false,
+    verificationStatus: 'unverified',
     rating: 0,
     reviewCount: 0,
     trustScore: 85,
-    createdAt: new Date().toISOString(),
+    listingPlan: 'free',
+    isPaid: false,
+    featuredUntil: null,
+    expiresAt: expiresAt.toISOString(),
+    createdAt: now.toISOString(),
     searchKeywords: generateSearchKeywords(property.title + " " + property.location),
   });
   return docRef.id;
@@ -331,3 +340,73 @@ export const submitPropertyVerificationDocument = async (propertyId: string, lan
   return downloadUrl;
 };
 
+// 12. Request landlord account verification (instant self-service)
+export const requestLandlordVerification = async (
+  userId: string,
+  fullName: string,
+  idNumber: string,
+  notes?: string
+) => {
+  const requestsRef = collection(db, 'verificationRequests');
+  const requestDoc = await addDoc(requestsRef, {
+    type: 'landlord',
+    landlordId: userId,
+    fullName,
+    idNumber,
+    notes: notes || '',
+    status: 'approved',
+    submittedAt: new Date().toISOString(),
+    reviewedAt: new Date().toISOString(),
+  });
+
+  const userRef = doc(db, 'users', userId);
+  await setDoc(userRef, {
+    isVerified: true,
+    verificationStatus: 'verified',
+    verifiedAt: new Date().toISOString(),
+    verificationRequestId: requestDoc.id,
+  }, { merge: true });
+
+  return requestDoc.id;
+};
+
+// 13. Request property verification (instant self-service)
+export const requestPropertyVerification = async (
+  propertyId: string,
+  landlordId: string,
+  propertyTitle: string,
+  notes?: string
+) => {
+  const requestsRef = collection(db, 'verificationRequests');
+  const requestDoc = await addDoc(requestsRef, {
+    type: 'property',
+    landlordId,
+    propertyId,
+    propertyTitle,
+    notes: notes || '',
+    status: 'approved',
+    submittedAt: new Date().toISOString(),
+    reviewedAt: new Date().toISOString(),
+  });
+
+  const propertyRef = doc(db, 'properties', propertyId);
+  await updateDoc(propertyRef, {
+    isVerified: true,
+    verificationStatus: 'verified',
+    verifiedAt: new Date().toISOString(),
+    verificationRequestId: requestDoc.id,
+  });
+
+  return requestDoc.id;
+};
+
+// 14. Fetch all verification requests for a landlord
+export const fetchVerificationRequests = async (landlordId: string) => {
+  const q = query(
+    collection(db, 'verificationRequests'),
+    where('landlordId', '==', landlordId),
+    orderBy('submittedAt', 'desc')
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+};

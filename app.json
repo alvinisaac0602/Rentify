@@ -7,6 +7,16 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "scheme": "rentify",
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1A56DB"
+    },
+    "androidStatusBar": {
+      "translucent": true,
+      "backgroundColor": "#00000000",
+      "barStyle": "dark-content"
+    },
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.rentify.app"
@@ -29,10 +39,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "b6ac3033-a5ee-4cb4-9ea4-d383c87adf79"
-      }
+      "router": {}
     }
   }
 }

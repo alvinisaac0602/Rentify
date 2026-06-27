@@ -1,11 +1,11 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
@@ -20,6 +20,7 @@ export default function SavedScreen() {
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [savedProperties, setSavedProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
+  const isFirstLoad = React.useRef(true);
 
   const loadSavedProperties = async (ids: string[]) => {
     if (ids.length === 0) {
@@ -30,17 +31,21 @@ export default function SavedScreen() {
     try {
       const { doc, getDoc } = require('firebase/firestore');
       const { db } = require('../../config/firebase');
-      const list: Property[] = [];
-      for (const id of ids) {
+      
+      const promises = ids.map(async (id: string) => {
         const docRef = doc(db, 'properties', id);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          list.push({
+          return {
             id: docSnap.id,
             ...docSnap.data()
-          } as Property);
+          } as Property;
         }
-      }
+        return null;
+      });
+
+      const results = await Promise.all(promises);
+      const list = results.filter((p: Property | null): p is Property => p !== null);
       setSavedProperties(list);
     } catch (e) {
       console.log('Error fetching saved properties:', e);
@@ -49,27 +54,37 @@ export default function SavedScreen() {
     }
   };
 
-  useEffect(() => {
-    const init = async () => {
-      try {
-        const stored = await AsyncStorage.getItem('saved_property_ids');
-        if (stored) {
-          const ids = JSON.parse(stored);
-          setSavedIds(ids);
-          await loadSavedProperties(ids);
-        } else {
+  useFocusEffect(
+    useCallback(() => {
+      const init = async () => {
+        if (isFirstLoad.current) {
+          setLoading(true);
+          isFirstLoad.current = false;
+        }
+        try {
+          const stored = await AsyncStorage.getItem('saved_property_ids');
+          if (stored) {
+            const ids = JSON.parse(stored);
+            setSavedIds(ids);
+            await loadSavedProperties(ids);
+          } else {
+            setSavedIds([]);
+            setSavedProperties([]);
+            setLoading(false);
+          }
+        } catch (e) {
           setLoading(false);
         }
-      } catch (e) {
+      };
+      if (!isGuest) {
+        init();
+      } else {
+        setSavedIds([]);
+        setSavedProperties([]);
         setLoading(false);
       }
-    };
-    if (!isGuest) {
-      init();
-    } else {
-      setLoading(false);
-    }
-  }, [isGuest]);
+    }, [isGuest])
+  );
 
   const handleRemove = async (id: string) => {
     const updated = savedIds.filter(x => x !== id);

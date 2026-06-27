@@ -1,8 +1,9 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
+import { Platform } from 'react-native';
 // @ts-ignore
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence, getAuth } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { initializeFirestore } from 'firebase/firestore';
+import { initializeFirestore, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // These can be supplied via environment variables in an .env file
@@ -18,13 +19,17 @@ const firebaseConfig = {
 // Initialize Firebase App
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Auth with AsyncStorage Persistence
-const auth = initializeAuth(app, {
-  persistence: getReactNativePersistence(AsyncStorage)
-});
+// Initialize Auth with platform-appropriate persistence
+const auth = Platform.OS === 'web' || typeof getReactNativePersistence !== 'function'
+  ? getAuth(app)
+  : initializeAuth(app, {
+      persistence: getReactNativePersistence(AsyncStorage)
+    });
 
-// Initialize Firestore
-const db = initializeFirestore(app, {});
+// Initialize Firestore with offline cache for speed
+const db = initializeFirestore(app, {
+  cacheSizeBytes: CACHE_SIZE_UNLIMITED,
+});
 
 // Initialize Storage
 const storage = getStorage(app);

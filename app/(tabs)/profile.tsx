@@ -1,12 +1,12 @@
 import { StatusBar } from 'expo-status-bar';
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Alert, ActivityIndicator, Switch, Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
@@ -17,12 +17,15 @@ import { uploadAvatarImage } from '../../services/firebaseServices';
 import { useTheme } from '../../context/ThemeContext';
 import { VerificationModal } from '../../components/modals/VerificationModal';
 import { FeedbackModal } from '../../components/modals/FeedbackModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { db } from '../../config/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const MENU_ITEMS = [
   { icon: 'home-city-outline', labelKey: 'my_properties', sublabel: 'Manage your listings', action: 'landlord' },
   { icon: 'heart-outline', labelKey: 'saved_properties', sublabel: 'Your favorites collection', action: 'saved' },
   { icon: 'message-text-outline', labelKey: 'messages', sublabel: 'Chats with landlords & tenants', action: 'messages' },
-  { icon: 'calendar-clock-outline', labelKey: 'viewing_requests', sublabel: 'Upcoming viewings schedule', action: null },
+  { icon: 'calendar-clock-outline', labelKey: 'viewing_requests', sublabel: 'Upcoming viewings schedule', action: 'viewings' },
   { icon: 'shield-check-outline', labelKey: 'verification_status', sublabel: 'Increase your tenant trust score', action: 'verification' },
   { icon: 'comment-quote-outline', labelKey: 'give_feedback', sublabel: 'Share suggestions or report bugs', action: 'feedback' },
   { icon: 'file-document-outline', labelKey: 'privacy_terms', sublabel: 'Privacy Policy & Terms of Service', action: 'legal' },
@@ -32,11 +35,48 @@ const MENU_ITEMS = [
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, isGuest, requireAuth, signOut, toggleLandlordMode, isLandlord, updateUserAvatar } = useAuth();
   const { theme, toggleTheme, language, setLanguage, t } = useTheme();
   const [uploading, setUploading] = useState(false);
   const [showVerification, setShowVerification] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [favoritesCount, setFavoritesCount] = useState(0);
+  const [viewingsCount, setViewingsCount] = useState(0);
+  const [bookingsCount, setBookingsCount] = useState(0);
+
+  const loadStats = useCallback(async () => {
+    if (!user) {
+      setFavoritesCount(0);
+      setViewingsCount(0);
+      setBookingsCount(0);
+      return;
+    }
+    try {
+      // 1. Favorites from AsyncStorage
+      const stored = await AsyncStorage.getItem('saved_property_ids');
+      const ids = stored ? JSON.parse(stored) : [];
+      setFavoritesCount(Array.isArray(ids) ? ids.length : 0);
+
+      // 2. Viewings from Firestore
+      const viewingsQuery = query(collection(db, 'viewingRequests'), where('userId', '==', user.id));
+      const viewingsSnap = await getDocs(viewingsQuery);
+      setViewingsCount(viewingsSnap.size);
+
+      // 3. Bookings from Firestore
+      const bookingsQuery = query(collection(db, 'bookings'), where('userId', '==', user.id));
+      const bookingsSnap = await getDocs(bookingsQuery);
+      setBookingsCount(bookingsSnap.size);
+    } catch (err) {
+      console.log('Error loading profile stats:', err);
+    }
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadStats();
+    }, [loadStats])
+  );
 
   const getLanguageLabel = (lang: string) => {
     switch (lang) {
@@ -123,6 +163,9 @@ export default function ProfileScreen() {
       router.push('/saved');
     } else if (action === 'messages') {
       router.push('/messages' as any);
+    } else if (action === 'viewings') {
+      if (!requireAuth('Sign in to view your viewings')) return;
+      router.push('/screens/my-viewings' as any);
     } else if (action === 'legal') {
       router.push('/screens/legal' as any);
     } else if (action === 'verification') {
@@ -137,87 +180,89 @@ export default function ProfileScreen() {
 
   if (isGuest) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={{ height: Spacing.sm }} />
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
+          <View style={{ height: Spacing.sm }} />
 
-        {/* Guest View card */}
-        <View style={styles.guestCenter}>
-          <LinearGradient
-            colors={[Colors.primary, '#6366F1']}
-            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={styles.guestCard}
-          >
-            <View style={styles.guestIconCircle}>
-              <MaterialCommunityIcons name="account-circle-outline" size={42} color={Colors.primary} />
-            </View>
-            <Text style={styles.guestTitle}>Rentify Profile</Text>
-            <Text style={styles.guestSubtitle}>
-              Sign in to manage your bookings, message owners, list properties, and complete secure rentals.
-            </Text>
-            
-            <TouchableOpacity
-              style={styles.guestSignInBtn}
-              activeOpacity={0.9}
-              onPress={() => requireAuth('Create a free Rentify account')}
+          {/* Guest View card */}
+          <View style={styles.guestCenter}>
+            <LinearGradient
+              colors={[Colors.primary, '#6366F1']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={styles.guestCard}
             >
-              <Text style={styles.guestSignInText}>Sign In / Register</Text>
-            </TouchableOpacity>
-          </LinearGradient>
-        </View>
+              <View style={styles.guestIconCircle}>
+                <MaterialCommunityIcons name="account-circle-outline" size={42} color={Colors.primary} />
+              </View>
+              <Text style={styles.guestTitle}>Rentify Profile</Text>
+              <Text style={styles.guestSubtitle}>
+                Sign in to manage your bookings, message owners, list properties, and complete secure rentals.
+              </Text>
+              
+              <TouchableOpacity
+                style={styles.guestSignInBtn}
+                activeOpacity={0.9}
+                onPress={() => requireAuth('Create a free Rentify account')}
+              >
+                <Text style={styles.guestSignInText}>Sign In / Register</Text>
+              </TouchableOpacity>
+            </LinearGradient>
+          </View>
 
-        {/* Guest basic options */}
-        <View style={styles.menuSection}>
-          {MENU_ITEMS.filter(item => item.action !== 'delete_account' && item.action !== 'landlord' && item.action !== 'saved' && item.action !== 'messages').map(item => (
-            <TouchableOpacity key={item.labelKey} style={styles.menuItem} onPress={() => handleMenuPress(item.action)}>
+          {/* Guest basic options */}
+          <View style={styles.menuSection}>
+            {MENU_ITEMS.filter(item => item.action !== 'delete_account' && item.action !== 'landlord' && item.action !== 'saved' && item.action !== 'messages').map(item => (
+              <TouchableOpacity key={item.labelKey} style={styles.menuItem} onPress={() => handleMenuPress(item.action)}>
+                <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
+                  <MaterialCommunityIcons name={item.icon as any} size={20} color={Colors.primary} />
+                </View>
+                <View style={styles.menuContent}>
+                  <Text style={styles.menuLabel}>{t(item.labelKey)}</Text>
+                  <Text style={styles.menuSublabel}>{item.sublabel}</Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={18} color={Colors.muted} />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Guest Settings Options */}
+          <View style={styles.menuSection}>
+            {/* Dark Mode */}
+            <View style={styles.menuItem}>
               <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
-                <MaterialCommunityIcons name={item.icon as any} size={20} color={Colors.primary} />
+                <MaterialCommunityIcons name="weather-night" size={20} color={Colors.primary} />
               </View>
               <View style={styles.menuContent}>
-                <Text style={styles.menuLabel}>{t(item.labelKey)}</Text>
-                <Text style={styles.menuSublabel}>{item.sublabel}</Text>
+                <Text style={styles.menuLabel}>{t('dark_mode')}</Text>
+                <Text style={styles.menuSublabel}>{theme === 'dark' ? 'Enabled' : 'Disabled'}</Text>
+              </View>
+              <Switch
+                value={theme === 'dark'}
+                onValueChange={toggleTheme}
+                trackColor={{ false: '#CBD5E1', true: Colors.primary }}
+                thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
+              />
+            </View>
+
+            {/* Language */}
+            <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={handleLanguagePress} activeOpacity={0.75}>
+              <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
+                <MaterialCommunityIcons name="translate" size={20} color={Colors.primary} />
+              </View>
+              <View style={styles.menuContent}>
+                <Text style={styles.menuLabel}>{t('language')}</Text>
+                <Text style={styles.menuSublabel}>{getLanguageLabel(language)}</Text>
               </View>
               <MaterialCommunityIcons name="chevron-right" size={18} color={Colors.muted} />
             </TouchableOpacity>
-          ))}
-        </View>
-
-        {/* Guest Settings Options */}
-        <View style={styles.menuSection}>
-          {/* Dark Mode */}
-          <View style={styles.menuItem}>
-            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
-              <MaterialCommunityIcons name="weather-night" size={20} color={Colors.primary} />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuLabel}>{t('dark_mode')}</Text>
-              <Text style={styles.menuSublabel}>{theme === 'dark' ? 'Enabled' : 'Disabled'}</Text>
-            </View>
-            <Switch
-              value={theme === 'dark'}
-              onValueChange={toggleTheme}
-              trackColor={{ false: '#CBD5E1', true: Colors.primary }}
-              thumbColor={Platform.OS === 'ios' ? undefined : '#FFFFFF'}
-            />
           </View>
-
-          {/* Language */}
-          <TouchableOpacity style={[styles.menuItem, { borderBottomWidth: 0 }]} onPress={handleLanguagePress} activeOpacity={0.75}>
-            <View style={[styles.menuIcon, { backgroundColor: Colors.primaryLight }]}>
-              <MaterialCommunityIcons name="translate" size={20} color={Colors.primary} />
-            </View>
-            <View style={styles.menuContent}>
-              <Text style={styles.menuLabel}>{t('language')}</Text>
-              <Text style={styles.menuSublabel}>{getLanguageLabel(language)}</Text>
-            </View>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={Colors.muted} />
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
+        </ScrollView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 120 }}>
         {/* Header Spacer */}
         <View style={{ height: Spacing.md }} />
@@ -254,22 +299,29 @@ export default function ProfileScreen() {
             <Text style={styles.profileName}>{user?.name}</Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
             <View style={styles.badgeRow}>
-              <TrustBadge type="verified_landlord" size="sm" />
+              {user?.isVerified ? (
+                <TrustBadge type={isLandlord ? 'verified_landlord' : 'verified_tenant'} size="sm" />
+              ) : (
+                <TrustBadge type="unverified" size="sm" />
+              )}
             </View>
           </LinearGradient>
 
           {/* Stats Bar */}
           <View style={styles.statsBar}>
             {[
-              { label: 'Favorites', value: '3', icon: 'heart-outline', color: Colors.danger },
-              { label: 'Viewings', value: '2', icon: 'calendar-outline', color: Colors.primary },
-              { label: 'Bookings', value: '1', icon: 'checkbox-marked-circle-outline', color: Colors.success },
-            ].map(s => (
-              <View key={s.label} style={styles.statItem}>
-                <MaterialCommunityIcons name={s.icon as any} size={18} color={s.color} />
-                <Text style={styles.statValue}>{s.value}</Text>
-                <Text style={styles.statLabel}>{s.label}</Text>
-              </View>
+              { label: 'Favorites', value: String(favoritesCount), icon: 'heart-outline', color: Colors.danger },
+              { label: 'Viewings', value: String(viewingsCount), icon: 'calendar-outline', color: Colors.primary },
+              { label: 'Bookings', value: String(bookingsCount), icon: 'checkbox-marked-circle-outline', color: Colors.success },
+            ].map((s, idx) => (
+              <React.Fragment key={s.label}>
+                <View style={styles.statItem}>
+                  <MaterialCommunityIcons name={s.icon as any} size={18} color={s.color} />
+                  <Text style={styles.statValue}>{s.value}</Text>
+                  <Text style={styles.statLabel}>{s.label}</Text>
+                </View>
+                {idx < 2 && <View style={styles.divider} />}
+              </React.Fragment>
             ))}
           </View>
         </View>
@@ -284,32 +336,35 @@ export default function ProfileScreen() {
             <MaterialCommunityIcons
               name="home-switch-outline"
               size={20}
-              color={isLandlord ? Colors.primary : Colors.white}
+              color={isLandlord ? Colors.white : Colors.primary}
             />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.landlordToggleText, isLandlord && { color: Colors.white }]}>
+            <Text style={[styles.landlordToggleText, isLandlord && styles.landlordToggleTextActive]}>
               {isLandlord ? 'Switch to Tenant View' : 'Switch to Landlord View'}
             </Text>
-            <Text style={[styles.landlordToggleSub, isLandlord && { color: 'rgba(255,255,255,0.78)' }]}>
+            <Text style={[styles.landlordToggleSub, isLandlord && styles.landlordToggleSubActive]}>
               {isLandlord ? 'Currently managing your properties' : 'List and manage properties on Rentify'}
             </Text>
           </View>
           <MaterialCommunityIcons
             name={isLandlord ? "toggle-switch" : "toggle-switch-off-outline"}
             size={36}
-            color={isLandlord ? Colors.white : Colors.muted}
+            color={isLandlord ? Colors.primary : Colors.muted}
           />
         </TouchableOpacity>
 
         {/* Menu Cards */}
         <View style={styles.menuSection}>
-          {MENU_ITEMS.map((item, index) => (
+          {MENU_ITEMS.filter(item => {
+            if (item.action === 'landlord' && !isLandlord) return false;
+            return true;
+          }).map((item, index, array) => (
             <TouchableOpacity
               key={item.labelKey}
               style={[
                 styles.menuItem,
-                index === MENU_ITEMS.length - 1 && { borderBottomWidth: 0 }
+                index === array.length - 1 && { borderBottomWidth: 0 }
               ]}
               onPress={() => handleMenuPress(item.action)}
               activeOpacity={0.75}
@@ -378,7 +433,7 @@ export default function ProfileScreen() {
         visible={showFeedback} 
         onClose={() => setShowFeedback(false)} 
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -438,17 +493,20 @@ const styles = StyleSheet.create({
     ...Shadow.sm,
   },
   landlordToggleActive: {
-    backgroundColor: Colors.primary, borderColor: Colors.primary,
+    backgroundColor: 'rgba(26, 86, 219, 0.08)',
+    borderColor: Colors.primary,
   },
   toggleIconCircle: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: Colors.primary, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: Colors.primaryLight, alignItems: 'center', justifyContent: 'center',
   },
   toggleIconCircleActive: {
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.primary,
   },
   landlordToggleText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.text },
+  landlordToggleTextActive: { color: Colors.primary },
   landlordToggleSub: { fontSize: FontSize.xs, color: Colors.muted, marginTop: 2 },
+  landlordToggleSubActive: { color: 'rgba(26, 86, 219, 0.75)' },
   menuSection: {
     backgroundColor: Colors.surface, marginHorizontal: Spacing.base,
     borderRadius: 20, ...Shadow.sm, marginBottom: Spacing.base,
@@ -474,10 +532,9 @@ const styles = StyleSheet.create({
   },
   signOutText: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.danger },
   guestCenter: {
-    flex: 1,
-    justifyContent: 'center',
     paddingHorizontal: Spacing.base,
-    paddingBottom: 40,
+    marginTop: Spacing.md,
+    marginBottom: Spacing.sm,
   },
   guestCard: {
     padding: Spacing.xl,
@@ -511,4 +568,10 @@ const styles = StyleSheet.create({
     ...Shadow.sm,
   },
   guestSignInText: { color: Colors.primary, fontSize: FontSize.base, fontWeight: FontWeight.bold },
+  divider: {
+    width: 1,
+    height: '60%',
+    backgroundColor: Colors.border,
+    alignSelf: 'center',
+  },
 });

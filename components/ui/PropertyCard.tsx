@@ -46,8 +46,15 @@ export function PropertyCard({ property, onSave, isSaved = false, horizontal = f
           <View style={[styles.hVerifiedDot, { backgroundColor: meta.color }]} />
         )}
         <View style={styles.hContent}>
-          <View style={[styles.catBadge, { backgroundColor: meta.lightColor }]}>
-            <Text style={[styles.catBadgeText, { color: meta.color }]}>{meta.emoji} {meta.label}</Text>
+          <View style={styles.row}>
+            <View style={[styles.catBadge, { backgroundColor: meta.lightColor }]}>
+              <Text style={[styles.catBadgeText, { color: meta.color }]}>{meta.emoji} {meta.label}</Text>
+            </View>
+            {property.unitsLeft !== undefined && property.unitsLeft <= 3 && (
+              <View style={[styles.catBadge, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <Text style={[styles.catBadgeText, { color: '#EF4444', fontWeight: 'bold' }]}>🔥 {property.unitsLeft} left</Text>
+              </View>
+            )}
           </View>
           <Text style={styles.hTitle} numberOfLines={2}>{property.title}</Text>
           <View style={styles.row}>
@@ -97,6 +104,22 @@ export function PropertyCard({ property, onSave, isSaved = false, horizontal = f
           <View style={styles.verifiedOverlay}>
             <MaterialCommunityIcons name="shield-check" size={12} color={Colors.white} />
             <Text style={styles.verifiedOverlayText}>Verified</Text>
+          </View>
+        )}
+
+        {/* Featured badge */}
+        {property.featuredUntil && property.featuredUntil > new Date().toISOString() && (
+          <View style={styles.featuredOverlay}>
+            <MaterialCommunityIcons name="star-circle" size={10} color="#F59E0B" />
+            <Text style={styles.featuredOverlayText}>Featured</Text>
+          </View>
+        )}
+
+        {/* Units Left overlay */}
+        {property.unitsLeft !== undefined && property.unitsLeft <= 3 && (
+          <View style={styles.unitsLeftOverlay}>
+            <MaterialCommunityIcons name="clock-alert-outline" size={10} color={Colors.white} />
+            <Text style={styles.unitsLeftText}>{property.unitsLeft} left!</Text>
           </View>
         )}
 
@@ -166,6 +189,24 @@ const styles = StyleSheet.create({
     fontSize: FontSize.xs,
     color: Colors.white,
     fontWeight: FontWeight.semibold,
+  },
+  featuredOverlay: {
+    position: 'absolute',
+    top: Spacing.sm,
+    left: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.92)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+    zIndex: 10,
+  },
+  featuredOverlayText: {
+    fontSize: 10,
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
   },
   verifiedOverlay: {
     position: 'absolute',
@@ -282,5 +323,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  unitsLeftOverlay: {
+    position: 'absolute',
+    bottom: Spacing.sm,
+    right: Spacing.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(239, 68, 68, 0.9)',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  unitsLeftText: {
+    fontSize: 10,
+    color: Colors.white,
+    fontWeight: FontWeight.bold,
   },
 });

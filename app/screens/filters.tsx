@@ -58,7 +58,9 @@ export default function FiltersScreen() {
   const reset = () => setTemp({ ...DEFAULT_FILTERS, category: temp.category });
   
   const apply = () => {
-    const target = from === 'explore' ? '/explore' : '/(tabs)';
+    // Route to '/' for home tab (index) and '/explore' for explore tab.
+    // Using '/' ensures useLocalSearchParams in index.tsx receives the params correctly.
+    const target = from === 'explore' ? '/explore' : '/';
     router.replace({
       pathname: target as any,
       params: {

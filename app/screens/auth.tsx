@@ -15,36 +15,54 @@ import { useAuth } from '../../context/AuthContext';
 
 export default function AuthScreen() {
   const router = useRouter();
-  const { signIn, authModalMessage } = useAuth();
+  const { signIn, signUp, resetPassword, authModalMessage } = useAuth();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      Alert.alert("Email Required", "Please enter your email address to reset your password.");
+      return;
+    }
+    setLoading(true);
+    try {
+      await resetPassword(email);
+      Alert.alert("Password Reset Sent", "Check your email inbox for instructions to reset your password.");
+    } catch (err: any) {
+      Alert.alert("Reset Error", err.message || "Could not send password reset email.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (mode === 'login') {
-      if (!email) return;
-      setLoading(true);
-      try {
-        await signIn(email);
-        router.back();
-      } catch (err: any) {
-        Alert.alert("Sign In Error", err.message || "Failed to sign in. Please verify your internet connection or email.");
-      } finally {
-        setLoading(false);
+    if (!email || !password) {
+      Alert.alert("Missing Fields", "Please enter both email and password.");
+      return;
+    }
+    if (mode === 'register' && (!username || !phone)) {
+      Alert.alert("Missing Fields", "Please complete all fields to register.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      if (mode === 'login') {
+        await signIn(email, password);
+      } else {
+        await signUp(email, password, username, phone);
       }
-    } else {
-      if (!username || !email || !phone) return;
-      setLoading(true);
-      try {
-        await signIn(email, undefined, username, phone);
-        router.back();
-      } catch (err: any) {
-        Alert.alert("Registration Error", err.message || "Failed to register. Please check your credentials.");
-      } finally {
-        setLoading(false);
-      }
+      router.back();
+    } catch (err: any) {
+      const title = mode === 'login' ? "Sign In Error" : "Registration Error";
+      Alert.alert(title, err.message || "Authentication failed. Please verify your credentials.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -60,7 +78,7 @@ export default function AuthScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
           contentContainerStyle={styles.body}
@@ -122,6 +140,41 @@ export default function AuthScreen() {
             </View>
           </View>
 
+          {/* Password */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.inputLabel}>Password</Text>
+            <View style={styles.inputWrapper}>
+              <MaterialCommunityIcons name="lock-outline" size={20} color={Colors.muted} />
+              <TextInput
+                value={password}
+                onChangeText={setPassword}
+                placeholder="••••••••"
+                placeholderTextColor={Colors.placeholder}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                style={styles.input}
+              />
+              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} activeOpacity={0.7}>
+                <MaterialCommunityIcons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color={Colors.muted}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Forgot Password Link */}
+          {mode === 'login' && (
+            <TouchableOpacity
+              style={styles.forgotBtn}
+              onPress={handleForgotPassword}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.forgotText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Phone Number (register) */}
           {mode === 'register' && (
             <View style={styles.inputGroup}>
@@ -131,7 +184,7 @@ export default function AuthScreen() {
                 <TextInput
                   value={phone}
                   onChangeText={setPhone}
-                  placeholder="e.g. +1 234 567 8900"
+                  placeholder="e.g. +256 700 000 000"
                   placeholderTextColor={Colors.placeholder}
                   keyboardType="phone-pad"
                   style={styles.input}
@@ -222,5 +275,15 @@ const styles = StyleSheet.create({
   terms: {
     textAlign: 'center', fontSize: FontSize.xs, color: Colors.muted,
     marginTop: Spacing.md, lineHeight: 18,
+  },
+  forgotBtn: {
+    alignSelf: 'flex-end',
+    marginTop: -4,
+    marginBottom: Spacing.md,
+  },
+  forgotText: {
+    fontSize: FontSize.sm,
+    fontWeight: FontWeight.semibold,
+    color: Colors.primary,
   },
 });

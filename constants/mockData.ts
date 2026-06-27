@@ -27,6 +27,13 @@ export interface Property {
   createdAt: string;
   latitude?: number;
   longitude?: number;
+  unitsLeft?: number;
+  // ── Listing monetisation fields ─────────────────────────────────
+  listingPlan?: 'free' | 'basic' | 'featured'; // paid tier
+  isPaid?: boolean;                              // has an active payment
+  featuredUntil?: string | null;                // ISO date — null = not featured
+  expiresAt?: string | null;                    // ISO date — null = never expires (paid)
+  verificationStatus?: 'unverified' | 'pending' | 'verified';
 }
 
 export interface Landlord {

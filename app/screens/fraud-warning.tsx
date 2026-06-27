@@ -3,13 +3,20 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
+import { useAuth } from '../../context/AuthContext';
 
 export default function FraudWarningScreen() {
   const router = useRouter();
+  const { requireAuth } = useAuth();
+  const { propertyId, propertyTitle, landlordId } = useLocalSearchParams<{
+    propertyId?: string;
+    propertyTitle?: string;
+    landlordId?: string;
+  }>();
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -44,16 +51,23 @@ export default function FraudWarningScreen() {
           ))}
         </View>
 
-        <Button
-          label="🚨 Report This Listing"
-          onPress={() => router.back()}
-          variant="danger"
-          fullWidth
-          style={{ marginBottom: Spacing.sm }}
-        />
+
         <Button
           label="Continue Anyway"
-          onPress={() => router.back()}
+          onPress={() => {
+            if (!requireAuth('Sign in to request a viewing')) return;
+            router.back();
+            setTimeout(() => {
+              router.push({
+                pathname: '/screens/viewing-request' as any,
+                params: {
+                  propertyId,
+                  propertyTitle,
+                  landlordId,
+                }
+              });
+            }, 100);
+          }}
           variant="ghost"
           fullWidth
         />

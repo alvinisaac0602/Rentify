@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TextInput,
   TouchableOpacity, FlatList, RefreshControl, Image, ActivityIndicator,
@@ -6,8 +6,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SplashScreen from 'expo-splash-screen';
 import { Colors, CategoryType } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { Property } from '../../constants/mockData';
@@ -18,8 +19,9 @@ import { FilterModal, DEFAULT_FILTERS, countActiveFilters } from '../../componen
 import { useWelcomeModal } from '../../hooks/useWelcomeModal';
 import { useAuth } from '../../context/AuthContext';
 import { fetchProperties } from '../../services/firebaseServices';
+import { collection, query, orderBy, onSnapshot, where } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
-const LOCATIONS = ['Kampala', 'Ntinda', 'Kira', 'Nakawa', 'Kololo', 'Entebbe'];
 const CATEGORIES: CategoryType[] = ['apartment', 'hostel', 'shop', 'airbnb'];
 
 const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
@@ -36,9 +38,12 @@ function applyFilters(properties: Property[], filters: FilterState): Property[] 
     if (filters.verifiedOnly && !p.isVerified) return false;
     if (filters.furnished === 'furnished' && !p.isFurnished) return false;
     if (filters.furnished === 'unfurnished' && p.isFurnished) return false;
-    if (filters.district !== 'All' &&
-      !p.district.toLowerCase().includes(filters.district.toLowerCase()) &&
-      !p.location.toLowerCase().includes(filters.district.toLowerCase())) return false;
+    if (filters.district !== 'All') {
+      const dist = p.district || '';
+      const loc = p.location || '';
+      const query = filters.district.toLowerCase();
+      if (!dist.toLowerCase().includes(query) && !loc.toLowerCase().includes(query)) return false;
+    }
     if (p.price < minP || p.price > maxP) return false;
     if (filters.bedrooms !== 'any') {
       const beds = p.bedrooms ?? 0;
@@ -70,13 +75,30 @@ export default function HomeScreen() {
   const { user, requireAuth } = useAuth();
   const { shouldShow } = useWelcomeModal();
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedLocation, setSelectedLocation] = useState('Kampala');
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [dbProperties, setDbProperties] = useState<Property[]>([]);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+
+  // Real-time blocked users listener
+  useEffect(() => {
+    if (!user) {
+      setBlockedUserIds([]);
+      return;
+    }
+    const blocksRef = collection(db, 'blocks');
+    const q = query(blocksRef, where('userId', '==', user.id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const blocked = snapshot.docs.map(doc => doc.data().blockedUserId);
+      setBlockedUserIds(blocked);
+    }, (err) => {
+      console.log('Error listening to blocks:', err);
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   // Synchronize state when params change
   useEffect(() => {
@@ -96,26 +118,7 @@ export default function HomeScreen() {
         minTrustScore: params.minTrustScore !== undefined ? parseInt(params.minTrustScore) : prev.minTrustScore,
       }));
     }
-  }, [params]);
-
-  const loadDbProperties = async () => {
-    try {
-      const result = await fetchProperties();
-      const properties = result.properties as Property[];
-      setDbProperties(properties);
-
-      // Prefetch all retrieved property images for instant navigation display
-      properties.forEach(p => {
-        if (p.images && p.images.length > 0) {
-          p.images.forEach(img => {
-            if (img) Image.prefetch(img).catch(() => {});
-          });
-        }
-      });
-    } catch (err) {
-      console.error('Error fetching Firestore properties:', err);
-    }
-  };
+  }, [JSON.stringify(params)]);
 
   useEffect(() => {
     AsyncStorage.getItem('onboarding_done').then(val => {
@@ -126,22 +129,64 @@ export default function HomeScreen() {
         if (shouldShow) {
           router.push('/screens/welcome' as any);
         }
-        loadDbProperties();
+        SplashScreen.hideAsync().catch(() => { });
       }
     });
   }, []);
 
+  // Real-time properties listener
+  useEffect(() => {
+    if (checkingOnboarding) return;
+
+    const propertiesRef = collection(db, 'properties');
+    const q = query(propertiesRef, orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const properties = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Property[];
+      setDbProperties(properties);
+
+      // Prefetch all retrieved property images for instant navigation display
+      properties.forEach(p => {
+        if (p.images && p.images.length > 0) {
+          p.images.forEach(img => {
+            if (img) Image.prefetch(img).catch(() => { });
+          });
+        }
+      });
+    }, (err) => {
+      console.error('Error listening to properties:', err);
+    });
+
+    return () => unsubscribe();
+  }, [checkingOnboarding]);
+
   const allProperties = useMemo(() => {
-    return dbProperties;
-  }, [dbProperties]);
+    if (blockedUserIds.length === 0) return dbProperties;
+    return dbProperties.filter(p => !blockedUserIds.includes(p.landlordId));
+  }, [dbProperties, blockedUserIds]);
+
+  const filteredProperties = useMemo(() => {
+    return applyFilters(allProperties, filters);
+  }, [allProperties, filters]);
 
   const featuredProperties = useMemo(() => {
-    return applyFilters(allProperties, filters).slice(0, 6);
-  }, [allProperties, filters]);
+    const now = new Date().toISOString();
+    // Paid featured listings first (featuredUntil > now), then verified, then newest
+    const paid = filteredProperties.filter(p => p.featuredUntil && p.featuredUntil > now);
+    const rest = filteredProperties.filter(p => !p.featuredUntil || p.featuredUntil <= now);
+    const sorted = [...paid, ...rest.filter(p => p.isVerified), ...rest.filter(p => !p.isVerified)];
+    return sorted.slice(0, 8);
+  }, [filteredProperties]);
 
   const nearbyProperties = useMemo(() => {
-    return applyFilters(allProperties, filters).slice(6, 12);
-  }, [allProperties, filters]);
+    const now = new Date().toISOString();
+    const featured = filteredProperties.filter(p => p.featuredUntil && p.featuredUntil > now);
+    const featuredIds = new Set(featured.slice(0, 8).map(p => p.id));
+    return filteredProperties.filter(p => !featuredIds.has(p.id)).slice(0, 8);
+  }, [filteredProperties]);
 
   const handleSearch = () => {
     const q = searchQuery.trim();
@@ -149,18 +194,45 @@ export default function HomeScreen() {
     else router.push('/explore' as any);
   };
 
-  const handleSave = (id: string) => {
+  const handleSave = async (id: string) => {
     if (!requireAuth('Sign in to save properties')) return;
-    setSavedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    router.push('/screens/saved-confirm' as any);
+    try {
+      const stored = await AsyncStorage.getItem('saved_property_ids');
+      let ids: string[] = stored ? JSON.parse(stored) : [];
+      if (ids.includes(id)) {
+        ids = ids.filter(x => x !== id);
+      } else {
+        ids.push(id);
+      }
+      await AsyncStorage.setItem('saved_property_ids', JSON.stringify(ids));
+      setSavedIds(ids);
+      router.push('/screens/saved-confirm' as any);
+    } catch (e) {
+      console.log('Error saving property:', e);
+    }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadSavedIds = async () => {
+        try {
+          const stored = await AsyncStorage.getItem('saved_property_ids');
+          if (stored) {
+            setSavedIds(JSON.parse(stored));
+          } else {
+            setSavedIds([]);
+          }
+        } catch (e) {
+          console.log('Error loading saved ids:', e);
+        }
+      };
+      loadSavedIds();
+    }, [])
+  );
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([
-      loadDbProperties(),
-      new Promise(r => setTimeout(r, 800))
-    ]);
+    await new Promise(r => setTimeout(r, 800));
     setRefreshing(false);
   };
 
@@ -176,9 +248,23 @@ export default function HomeScreen() {
   const activeCount = countActiveFilters(filters);
 
   if (checkingOnboarding) {
+    // Show skeleton instead of blank screen to avoid white flash
     return (
-      <SafeAreaView style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]} edges={['top']}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <LinearGradient
+          colors={[Colors.primary, '#3B82F6']}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={styles.headerGradient}
+        >
+          <View style={styles.headerTop}>
+            <View style={{ gap: 6 }}>
+              <View style={styles.skeletonLine} />
+              <View style={[styles.skeletonLine, { width: 180, height: 22 }]} />
+            </View>
+            <View style={styles.skeletonCircle} />
+          </View>
+          <View style={[styles.skeletonPill, { marginTop: 4 }]} />
+        </LinearGradient>
       </SafeAreaView>
     );
   }
@@ -253,22 +339,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Location Pills */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.locationScroll}>
-            {LOCATIONS.map(loc => (
-              <TouchableOpacity
-                key={loc}
-                onPress={() => setSelectedLocation(loc)}
-                style={[styles.locationPill, selectedLocation === loc && styles.locationPillActive]}
-              >
-                <MaterialCommunityIcons name="map-marker" size={12}
-                  color={selectedLocation === loc ? Colors.white : 'rgba(255,255,255,0.7)'} />
-                <Text style={[styles.locationText, selectedLocation === loc && styles.locationTextActive]}>
-                  {loc}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
         </LinearGradient>
 
         {/* ── Quick Filter Chips ───────────────────────── */}
@@ -303,23 +373,51 @@ export default function HomeScreen() {
             ))}
           </View>
 
-          {/* ── Trust Banner ─────────────────────────────── */}
-          <View style={styles.trustBanner}>
-            <LinearGradient
-              colors={[Colors.trustLight, Colors.primaryLight]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={styles.trustGradient}
+          {/* ── Extra Services ───────────────────────────── */}
+          <Text style={[styles.sectionTitle, { marginTop: Spacing.xs }]}>More Services</Text>
+          <View style={styles.categoryGrid}>
+            <TouchableOpacity
+              style={[styles.serviceCard, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}
+              onPress={() => router.push('/screens/furniture-shop' as any)}
+              activeOpacity={0.85}
             >
-              <MaterialCommunityIcons name="shield-check" size={28} color={Colors.trust} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.trustTitle}>Trust First, Always</Text>
-                <Text style={styles.trustSubtitle}>Every listing verified by our team</Text>
-              </View>
-              <TouchableOpacity onPress={() => router.push('/explore' as any)}>
-                <Text style={styles.trustCta}>Learn more →</Text>
-              </TouchableOpacity>
-            </LinearGradient>
+              <Text style={styles.serviceEmoji}>🛋️</Text>
+              <Text style={[styles.serviceName, { color: '#92400E' }]}>Furniture</Text>
+              <Text style={[styles.serviceSub, { color: '#B45309' }]}>Sofas, beds & more</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.serviceCard, { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' }]}
+              onPress={() => router.push('/screens/furniture-shop?cat=Beddings' as any)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.serviceEmoji}>🛏️</Text>
+              <Text style={[styles.serviceName, { color: '#14532D' }]}>Beddings</Text>
+              <Text style={[styles.serviceSub, { color: '#166534' }]}>Duvets, pillows & sets</Text>
+            </TouchableOpacity>
           </View>
+
+
+
+
+          {/* ── Furnish Your Home Banner ──────────────────── */}
+          <TouchableOpacity
+            activeOpacity={0.88}
+            onPress={() => router.push('/screens/furniture-shop' as any)}
+            style={styles.furnishBanner}
+          >
+            <LinearGradient
+              colors={['#D97706', '#F59E0B']}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.furnishGradient}
+            >
+              <Text style={styles.furnishEmoji}>🛋️</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.furnishTitle}>Furnish Your New Home</Text>
+                <Text style={styles.furnishSub}>Beds, sofas, duvets — delivered to your door</Text>
+              </View>
+              <MaterialCommunityIcons name="arrow-right" size={20} color="rgba(255,255,255,0.9)" />
+            </LinearGradient>
+          </TouchableOpacity>
 
           {/* ── Featured Listings ────────────────────────── */}
           <View style={styles.sectionHeader}>
@@ -349,24 +447,9 @@ export default function HomeScreen() {
             />
           )}
 
-          {/* ── Stats ────────────────────────────────────── */}
-          <View style={styles.statsRow}>
-            {[
-              { label: 'Verified Listings', value: '2,400+', icon: 'shield-check', color: Colors.trust },
-              { label: 'Happy Tenants', value: '15K+', icon: 'account-group', color: Colors.success },
-              { label: 'Districts Covered', value: '12', icon: 'map-marker-multiple', color: Colors.warning },
-            ].map(s => (
-              <View key={s.label} style={styles.statCard}>
-                <MaterialCommunityIcons name={s.icon as any} size={22} color={s.color} />
-                <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
-                <Text style={styles.statLabel}>{s.label}</Text>
-              </View>
-            ))}
-          </View>
-
           {/* ── Near Location ────────────────────────────── */}
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Near {selectedLocation}</Text>
+            <Text style={styles.sectionTitle}>Near You</Text>
             <TouchableOpacity onPress={() => router.push('/explore' as any)}>
               <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>
@@ -442,6 +525,21 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.text },
   seeAll: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.semibold },
   categoryGrid: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.md },
+  // ── Service tiles (furniture/beddings) ────────────────────────────────
+  serviceCard: {
+    flex: 1, borderRadius: Radius.xl, padding: Spacing.md,
+    alignItems: 'center', gap: 4, borderWidth: 1.5,
+    minHeight: 90, justifyContent: 'center',
+  },
+  serviceEmoji: { fontSize: 28 },
+  serviceName: { fontSize: FontSize.base, fontWeight: FontWeight.bold },
+  serviceSub: { fontSize: FontSize.xs, textAlign: 'center' },
+  // ── Furnish banner ───────────────────────────────────────────────────
+  furnishBanner: { borderRadius: Radius.xl, overflow: 'hidden', marginVertical: Spacing.sm, ...Shadow.sm },
+  furnishGradient: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.base },
+  furnishEmoji: { fontSize: 28 },
+  furnishTitle: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: '#fff' },
+  furnishSub: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   trustBanner: { marginVertical: Spacing.sm, borderRadius: Radius.xl, overflow: 'hidden', ...Shadow.sm },
   trustGradient: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.base },
   trustTitle: { fontSize: FontSize.base, fontWeight: FontWeight.bold, color: Colors.trust },
@@ -456,4 +554,18 @@ const styles = StyleSheet.create({
   emptySection: { alignItems: 'center', paddingVertical: Spacing.xl, gap: Spacing.sm },
   emptyEmoji: { fontSize: 32 },
   emptyMsg: { fontSize: FontSize.sm, color: Colors.muted, textAlign: 'center' },
+  // ── Skeleton styles ────────────────────────────────────────────────────
+  skeletonLine: {
+    height: 14, width: 130, borderRadius: 7,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  skeletonCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  skeletonPill: {
+    height: 42, borderRadius: Radius.xl,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    marginHorizontal: 2,
+  },
 });

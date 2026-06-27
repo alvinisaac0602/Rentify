@@ -1,10 +1,11 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors, CategoryType } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { DISTRICTS, Property } from '../../constants/mockData';
@@ -86,7 +87,7 @@ export default function ExploreScreen() {
       }));
       if (params.q !== undefined) setSearchQuery(params.q);
     }
-  }, [params]);
+  }, [JSON.stringify(params)]);
 
   const allProperties = useMemo(() => {
     return dbProperties;
@@ -99,9 +100,12 @@ export default function ExploreScreen() {
       if (filters.verifiedOnly && !p.isVerified) return false;
       if (filters.furnished === 'furnished' && !p.isFurnished) return false;
       if (filters.furnished === 'unfurnished' && p.isFurnished) return false;
-      if (filters.district !== 'All' &&
-        !p.district.toLowerCase().includes(filters.district.toLowerCase()) &&
-        !p.location.toLowerCase().includes(filters.district.toLowerCase())) return false;
+      if (filters.district !== 'All') {
+        const dist = p.district || '';
+        const loc = p.location || '';
+        const query = filters.district.toLowerCase();
+        if (!dist.toLowerCase().includes(query) && !loc.toLowerCase().includes(query)) return false;
+      }
       if (p.price < minPrice || p.price > maxPrice) return false;
       if (filters.bedrooms !== 'any') {
         const beds = p.bedrooms ?? 0;
@@ -122,11 +126,41 @@ export default function ExploreScreen() {
     });
   }, [allProperties, filters, searchQuery]);
 
-  const handleSave = (id: string) => {
+  const handleSave = async (id: string) => {
     if (!requireAuth('Sign in to save properties')) return;
-    setSavedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    router.push('/screens/saved-confirm' as any);
+    try {
+      const stored = await AsyncStorage.getItem('saved_property_ids');
+      let ids: string[] = stored ? JSON.parse(stored) : [];
+      if (ids.includes(id)) {
+        ids = ids.filter(x => x !== id);
+      } else {
+        ids.push(id);
+      }
+      await AsyncStorage.setItem('saved_property_ids', JSON.stringify(ids));
+      setSavedIds(ids);
+      router.push('/screens/saved-confirm' as any);
+    } catch (e) {
+      console.log('Error saving property:', e);
+    }
   };
+
+  useFocusEffect(
+    useCallback(() => {
+      const loadSavedIds = async () => {
+        try {
+          const stored = await AsyncStorage.getItem('saved_property_ids');
+          if (stored) {
+            setSavedIds(JSON.parse(stored));
+          } else {
+            setSavedIds([]);
+          }
+        } catch (e) {
+          console.log('Error loading saved ids:', e);
+        }
+      };
+      loadSavedIds();
+    }, [])
+  );
 
   const activeCount = countActiveFilters(filters);
 

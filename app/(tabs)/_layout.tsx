@@ -30,8 +30,8 @@ function TabIcon({ name, activeName, focused, color }: TabIconProps) {
 
 export default function TabsLayout() {
   const insets = useSafeAreaInsets();
-  const bottomPadding = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'ios' ? 16 : 8);
-  const tabBarHeight = 52 + bottomPadding;
+  const bottomPadding = insets.bottom > 0 ? insets.bottom + 6 : (Platform.OS === 'ios' ? 16 : 18);
+  const tabBarHeight = 54 + bottomPadding;
   const { user, isGuest } = useAuth();
 
   return (

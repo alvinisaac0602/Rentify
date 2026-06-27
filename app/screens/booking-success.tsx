@@ -1,8 +1,9 @@
 import { StatusBar } from 'expo-status-bar';
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
@@ -25,6 +26,26 @@ export default function BookingSuccessScreen() {
           <MaterialCommunityIcons name="message-text" size={22} color={Colors.primary} />
           <Text style={styles.infoText}>Check your Messages for next steps</Text>
         </View>
+
+        {/* Furniture upsell */}
+        <TouchableOpacity
+          style={styles.upsellCard}
+          activeOpacity={0.88}
+          onPress={() => router.push('/screens/furniture-shop?from=booking' as any)}
+        >
+          <LinearGradient
+            colors={['#D97706', '#F59E0B']}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={styles.upsellGradient}
+          >
+            <Text style={styles.upsellEmoji}>🛋️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.upsellTitle}>Furnish Your New Place</Text>
+              <Text style={styles.upsellSub}>Beds, sofas & beddings — delivered fast</Text>
+            </View>
+            <MaterialCommunityIcons name="arrow-right" size={18} color="rgba(255,255,255,0.9)" />
+          </LinearGradient>
+        </TouchableOpacity>
 
         <Button
           label="View Messages 💬"
@@ -64,4 +85,9 @@ const styles = StyleSheet.create({
     padding: Spacing.base, width: '100%',
   },
   infoText: { fontSize: FontSize.base, color: Colors.primary, fontWeight: FontWeight.medium, flex: 1 },
+  upsellCard: { width: '100%', borderRadius: Radius.xl, overflow: 'hidden', ...Shadow.sm },
+  upsellGradient: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.base },
+  upsellEmoji: { fontSize: 24 },
+  upsellTitle: { fontSize: FontSize.sm, fontWeight: FontWeight.bold, color: '#fff' },
+  upsellSub: { fontSize: FontSize.xs, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
 });

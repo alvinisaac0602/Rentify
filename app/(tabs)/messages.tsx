@@ -1,5 +1,5 @@
+import React, { useState, useEffect, useRef } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator,
 } from 'react-native';
@@ -18,6 +18,7 @@ export default function MessagesListScreen() {
   const [conversations, setConversations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Record<string, { name: string; avatar: string; isVerified: boolean }>>({});
+  const profilesRef = useRef<Record<string, { name: string; avatar: string; isVerified: boolean }>>({});
 
   useEffect(() => {
     if (!currentUser) {
@@ -53,7 +54,7 @@ export default function MessagesListScreen() {
           unread: data.lastMessageSenderId !== currentUser.id ? 1 : 0,
         });
 
-        if (otherId && !profiles[otherId] && !userIdsToFetch.includes(otherId)) {
+        if (otherId && !profilesRef.current[otherId] && !userIdsToFetch.includes(otherId)) {
           userIdsToFetch.push(otherId);
         }
       });
@@ -63,28 +64,31 @@ export default function MessagesListScreen() {
 
       if (userIdsToFetch.length > 0) {
         const { getDoc, doc } = require('firebase/firestore');
-        const newProfiles = { ...profiles };
-        for (const uId of userIdsToFetch) {
-          try {
-            const uDoc = await getDoc(doc(db, 'users', uId));
-            if (uDoc.exists()) {
-              const uData = uDoc.data();
-              newProfiles[uId] = {
-                name: uData.name || 'User',
-                avatar: uData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
-                isVerified: !!uData.isVerified,
-              };
-            } else {
-              newProfiles[uId] = {
-                name: 'Verified Landlord',
-                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
-                isVerified: true,
-              };
+        const newProfiles = { ...profilesRef.current };
+        await Promise.all(
+          userIdsToFetch.map(async (uId: string) => {
+            try {
+              const uDoc = await getDoc(doc(db, 'users', uId));
+              if (uDoc.exists()) {
+                const uData = uDoc.data();
+                newProfiles[uId] = {
+                  name: uData.displayName || uData.name || 'User',
+                  avatar: uData.avatarUrl || uData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+                  isVerified: !!uData.isVerified,
+                };
+              } else {
+                newProfiles[uId] = {
+                  name: 'Verified Landlord',
+                  avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+                  isVerified: true,
+                };
+              }
+            } catch (e) {
+              console.log('Error fetching profile:', e);
             }
-          } catch (e) {
-            console.log('Error fetching profile:', e);
-          }
-        }
+          })
+        );
+        profilesRef.current = newProfiles;
         setProfiles(newProfiles);
       }
     }, (error: any) => {

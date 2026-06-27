@@ -9,15 +9,33 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
+import { db } from '../../config/firebase';
+import { collection, addDoc } from 'firebase/firestore';
+import { useAuth } from '../../context/AuthContext';
 
 export default function BookingScreen() {
   const router = useRouter();
+  const { user } = useAuth();
   const { propertyTitle, price } = useLocalSearchParams<{ propertyTitle?: string; price?: string }>();
   const [nights, setNights] = useState(2);
   const [confirmed, setConfirmed] = useState(false);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setConfirmed(true);
+    try {
+      if (user) {
+        await addDoc(collection(db, 'bookings'), {
+          propertyTitle: propertyTitle || '',
+          price: price || '',
+          nights: nights,
+          userId: user.id,
+          status: 'confirmed',
+          createdAt: new Date().toISOString()
+        });
+      }
+    } catch (e) {
+      console.log('Error adding booking:', e);
+    }
     setTimeout(() => {
       router.replace('/screens/booking-success' as any);
     }, 2000);

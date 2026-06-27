@@ -5,7 +5,7 @@ import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Spacing } from '../../constants/theme';
 
 interface TrustBadgeProps {
-  type: 'verified_landlord' | 'verified_property' | 'top_rated' | 'unverified';
+  type: 'verified_landlord' | 'verified_tenant' | 'verified_property' | 'top_rated' | 'unverified';
   size?: 'sm' | 'md';
 }
 
@@ -13,6 +13,12 @@ export function TrustBadge({ type, size = 'md' }: TrustBadgeProps) {
   const config = {
     verified_landlord: {
       label: 'Verified Landlord',
+      icon: 'shield-check' as const,
+      bg: Colors.trustLight,
+      color: Colors.trust,
+    },
+    verified_tenant: {
+      label: 'Verified Tenant',
       icon: 'shield-check' as const,
       bg: Colors.trustLight,
       color: Colors.trust,

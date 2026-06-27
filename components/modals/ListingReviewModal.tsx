@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState } from 'react';
-import { Modal, View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { Modal, View, Text, StyleSheet, TouchableOpacity, Alert, ActivityIndicator, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
@@ -67,97 +67,103 @@ export function ListingReviewModal({ visible, onClose }: ListingReviewModalProps
       <StatusBar style="auto" />
       <View style={styles.overlay}>
         <View style={styles.card}>
-          <View style={styles.icon}>
-            <MaterialCommunityIcons name="magnify-scan" size={36} color={Colors.primary} />
-          </View>
-          <Text style={styles.title}>Listing Under Review 🔍</Text>
-          <Text style={styles.description}>
-            Your property has been submitted successfully. Our verification team will review it within 30 minutes.
-          </Text>
-
-          {/* Verification Status Badge */}
-          <View style={[styles.badgeContainer, isVerified ? styles.badgeVerified : styles.badgeUnverified]}>
-            <MaterialCommunityIcons 
-              name={isVerified ? "shield-check" : "shield-alert-outline"} 
-              size={18} 
-              color={isVerified ? Colors.success : Colors.danger} 
-            />
-            <Text style={[styles.badgeText, { color: isVerified ? Colors.success : Colors.danger }]}>
-              {isVerified ? 'Verified Landlord Account' : 'Unverified Landlord'}
+          <ScrollView
+            style={{ width: '100%' }}
+            contentContainerStyle={{ alignItems: 'center' }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.icon}>
+              <MaterialCommunityIcons name="magnify-scan" size={36} color={Colors.primary} />
+            </View>
+            <Text style={styles.title}>Listing Under Review 🔍</Text>
+            <Text style={styles.description}>
+              Your property has been submitted successfully. Our verification team will review it within 30 minutes.
             </Text>
-          </View>
 
-          {/* Verification Suggestion */}
-          {!isVerified && (
-            <View style={styles.suggestionBox}>
-              <View style={styles.suggestionHeader}>
-                <MaterialCommunityIcons name="shield-lock-open-outline" size={22} color={Colors.warning} />
-                <Text style={styles.suggestionTitle}>Get Verified Badge 🛡️</Text>
-              </View>
-              <Text style={styles.suggestionText}>
-                Verified landlords get 5× more views, trust badges on listings, and instant listing approvals.
+            {/* Verification Status Badge */}
+            <View style={[styles.badgeContainer, isVerified ? styles.badgeVerified : styles.badgeUnverified]}>
+              <MaterialCommunityIcons 
+                name={isVerified ? "shield-check" : "shield-alert-outline"} 
+                size={18} 
+                color={isVerified ? Colors.success : Colors.danger} 
+              />
+              <Text style={[styles.badgeText, { color: isVerified ? Colors.success : Colors.danger }]}>
+                {isVerified ? 'Verified Landlord Account' : 'Unverified Landlord'}
               </Text>
+            </View>
 
-              {/* Privacy Consent Box */}
-              <View style={styles.privacyBox}>
-                <Text style={styles.privacyTitle}>🔒 Secure Processing & Consent</Text>
-                <Text style={styles.privacyText}>
-                  Rentify encrypts your uploaded credentials. We only use this information to authenticate you as a landlord and prevent rental fraud. We promise to never share, sell, or misuse your private documents.
+            {/* Verification Suggestion */}
+            {!isVerified && (
+              <View style={styles.suggestionBox}>
+                <View style={styles.suggestionHeader}>
+                  <MaterialCommunityIcons name="shield-lock-open-outline" size={22} color={Colors.warning} />
+                  <Text style={styles.suggestionTitle}>Get Verified Badge 🛡️</Text>
+                </View>
+                <Text style={styles.suggestionText}>
+                  Verified landlords get 5× more views, trust badges on listings, and instant listing approvals.
                 </Text>
-                <TouchableOpacity 
-                  style={styles.checkboxRow}
-                  onPress={() => setConsent(c => !c)}
-                  activeOpacity={0.8}
-                >
-                  <MaterialCommunityIcons 
-                    name={consent ? "checkbox-marked" : "checkbox-blank-outline"} 
-                    size={20} 
-                    color={consent ? Colors.primary : Colors.muted} 
-                  />
-                  <Text style={styles.checkboxLabel}>
-                    I consent to Rentify processing my identity document safely.
+
+                {/* Privacy Consent Box */}
+                <View style={styles.privacyBox}>
+                  <Text style={styles.privacyTitle}>🔒 Secure Processing & Consent</Text>
+                  <Text style={styles.privacyText}>
+                    Rentify encrypts your uploaded credentials. We only use this information to authenticate you as a landlord and prevent rental fraud. We promise to never share, sell, or misuse your private documents.
                   </Text>
+                  <TouchableOpacity 
+                    style={styles.checkboxRow}
+                    onPress={() => setConsent(c => !c)}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialCommunityIcons 
+                      name={consent ? "checkbox-marked" : "checkbox-blank-outline"} 
+                      size={20} 
+                      color={consent ? Colors.primary : Colors.muted} 
+                    />
+                    <Text style={styles.checkboxLabel}>
+                      I consent to Rentify processing my identity document safely.
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                <TouchableOpacity 
+                  style={[styles.suggestBtn, !consent && styles.suggestBtnDisabled]} 
+                  onPress={handleStartVerification}
+                  disabled={uploading || !consent}
+                >
+                  {uploading ? (
+                    <ActivityIndicator size="small" color={Colors.white} />
+                  ) : (
+                    <>
+                      <MaterialCommunityIcons name="upload" size={16} color={Colors.white} />
+                      <Text style={styles.suggestBtnText}>Upload ID / Permit</Text>
+                    </>
+                  )}
                 </TouchableOpacity>
               </View>
+            )}
 
-              <TouchableOpacity 
-                style={[styles.suggestBtn, !consent && styles.suggestBtnDisabled]} 
-                onPress={handleStartVerification}
-                disabled={uploading || !consent}
-              >
-                {uploading ? (
-                  <ActivityIndicator size="small" color={Colors.white} />
-                ) : (
-                  <>
-                    <MaterialCommunityIcons name="upload" size={16} color={Colors.white} />
-                    <Text style={styles.suggestBtnText}>Upload ID / Permit</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.steps}>
-            {[
-              { step: '1', text: 'Listing received', done: true },
-              { step: '2', text: 'Identity verification', done: isVerified },
-              { step: '3', text: 'Property confirmation', done: false },
-              { step: '4', text: 'Published live', done: false },
-            ].map(s => (
-              <View key={s.step} style={styles.stepRow}>
-                <View style={[styles.stepDot, s.done && { backgroundColor: Colors.success }]}>
-                  {s.done
-                    ? <MaterialCommunityIcons name="check" size={12} color={Colors.white} />
-                    : <Text style={styles.stepNum}>{s.step}</Text>
-                  }
+            <View style={styles.steps}>
+              {[
+                { step: '1', text: 'Listing received', done: true },
+                { step: '2', text: 'Identity verification', done: isVerified },
+                { step: '3', text: 'Property confirmation', done: false },
+                { step: '4', text: 'Published live', done: false },
+              ].map(s => (
+                <View key={s.step} style={styles.stepRow}>
+                  <View style={[styles.stepDot, s.done && { backgroundColor: Colors.success }]}>
+                    {s.done
+                      ? <MaterialCommunityIcons name="check" size={12} color={Colors.white} />
+                      : <Text style={styles.stepNum}>{s.step}</Text>
+                    }
+                  </View>
+                  <Text style={[styles.stepText, s.done && { color: Colors.success, fontWeight: FontWeight.semibold }]}>
+                    {s.text}
+                  </Text>
                 </View>
-                <Text style={[styles.stepText, s.done && { color: Colors.success, fontWeight: FontWeight.semibold }]}>
-                  {s.text}
-                </Text>
-              </View>
-            ))}
-          </View>
-          <Button label="Got it!" onPress={onClose} fullWidth />
+              ))}
+            </View>
+            <Button label="Got it!" onPress={onClose} fullWidth />
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -172,6 +178,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface, borderRadius: Radius['2xl'],
     padding: Spacing.xl, width: '100%', alignItems: 'center', ...Shadow.lg,
+    maxHeight: '85%',
   },
   icon: {
     width: 72, height: 72, borderRadius: 36,

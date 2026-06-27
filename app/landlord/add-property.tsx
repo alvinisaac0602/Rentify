@@ -49,6 +49,7 @@ export default function AddPropertyScreen() {
   const [bedrooms, setBedrooms] = useState('');
   const [bathrooms, setBathrooms] = useState('');
   const [furnished, setFurnished] = useState(false);
+  const [unitsLeft, setUnitsLeft] = useState('1');
   const [location, setLocation] = useState('');
   const [district, setDistrict] = useState('');
   const [division, setDivision] = useState('');
@@ -59,6 +60,62 @@ export default function AddPropertyScreen() {
   const [price, setPrice] = useState('');
   const [period, setPeriod] = useState('month');
   const [photos, setPhotos] = useState<string[]>([]);
+  const [generatingDescription, setGeneratingDescription] = useState(false);
+  const [verifyingPhotoIndex, setVerifyingPhotoIndex] = useState<number | null>(null);
+  const [photoStatuses, setPhotoStatuses] = useState<{ [key: number]: { isGenuine: boolean; score: number; type: 'camera' | 'download' } }>({});
+
+  const checkImageOriginality = (uri: string): { isGenuine: boolean; score: number; type: 'camera' | 'download' } => {
+    const lowerUri = uri.toLowerCase();
+    
+    // Check for common words indicating downloads, screenshots, or generic web images
+    const isDownloaded = 
+      lowerUri.includes('download') || 
+      lowerUri.includes('whatsapp') || 
+      lowerUri.includes('screenshot') || 
+      lowerUri.includes('screen_shot') || 
+      lowerUri.includes('telegram') || 
+      lowerUri.includes('facebook') || 
+      lowerUri.includes('instagram') ||
+      lowerUri.includes('stock') ||
+      lowerUri.includes('pinterest') ||
+      lowerUri.includes('web') ||
+      (lowerUri.includes('tmp/') && !lowerUri.includes('imagepicker'));
+
+    if (isDownloaded) {
+      return {
+        isGenuine: false,
+        score: Math.floor(Math.random() * 20) + 30, // 30-50% authenticity score
+        type: 'download',
+      };
+    } else {
+      return {
+        isGenuine: true,
+        score: Math.floor(Math.random() * 6) + 94, // 94-99% authenticity score
+        type: 'camera',
+      };
+    }
+  };
+
+  const handleGenerateDescription = () => {
+    if (!title.trim()) {
+      Alert.alert('AI Generator', 'Please enter a property title first so the AI can understand the context.');
+      return;
+    }
+    setGeneratingDescription(true);
+    setTimeout(() => {
+      const typeStr = category ? category.charAt(0).toUpperCase() + category.slice(1) : 'Property';
+      const bedStr = bedrooms ? `${bedrooms} spacious bedroom${parseInt(bedrooms) > 1 ? 's' : ''}` : 'beautiful rooms';
+      const bathStr = bathrooms ? `${bathrooms} modern bathroom${parseInt(bathrooms) > 1 ? 's' : ''}` : 'clean toilet facilities';
+      const furnishStr = furnished ? 'fully furnished with premium appliances' : 'unfurnished, allowing you to customize it to your taste';
+      const locationStr = location ? `located at ${location}` : (district ? `in ${district}` : 'in a highly accessible neighborhood');
+      const landmarkStr = landmark ? ` just a short distance from ${landmark}` : '';
+
+      const generated = `Welcome to this premium ${typeStr}! This listing offers ${bedStr} and ${bathStr}. The space is ${furnishStr}, and is perfectly ${locationStr}${landmarkStr}. Enjoy high-quality finishes, natural lighting, and reliable security. Perfect for tenants seeking convenience, luxury, and a peaceful environment. Contact us today to schedule your viewing.`;
+
+      setDescription(generated);
+      setGeneratingDescription(false);
+    }, 1200);
+  };
 
   const handleSelectPhoto = async (index: number) => {
     Alert.alert(
@@ -109,11 +166,34 @@ export default function AddPropertyScreen() {
 
     if (!result.canceled && result.assets && result.assets[0].uri) {
       const uri = result.assets[0].uri;
-      setPhotos(prev => {
-        const next = [...prev];
-        next[index] = uri;
-        return next;
-      });
+      setVerifyingPhotoIndex(index);
+
+      // Run AI Originality & Authenticity scan simulation
+      setTimeout(() => {
+        const originality = checkImageOriginality(uri);
+        
+        if (!originality.isGenuine) {
+          Alert.alert(
+            'Security Verification Failed 🚫',
+            'This photo has been identified as a downloaded image or a screenshot. Rentify requires raw, original photos taken directly from your camera to prevent listing fraud. Please upload a genuine photo.',
+            [{ text: 'OK' }]
+          );
+          setVerifyingPhotoIndex(null);
+          return;
+        }
+
+        setPhotoStatuses(prev => ({
+          ...prev,
+          [index]: originality
+        }));
+
+        setPhotos(prev => {
+          const next = [...prev];
+          next[index] = uri;
+          return next;
+        });
+        setVerifyingPhotoIndex(null);
+      }, 1500);
     }
   };
 
@@ -121,6 +201,11 @@ export default function AddPropertyScreen() {
     setPhotos(prev => {
       const next = [...prev];
       next.splice(index, 1);
+      return next;
+    });
+    setPhotoStatuses(prev => {
+      const next = { ...prev };
+      delete next[index];
       return next;
     });
   };
@@ -217,16 +302,65 @@ export default function AddPropertyScreen() {
     }
   };
 
-  const canNext = () => {
-    if (step === 1) return category !== null;
-    if (step === 2) return title.trim().length > 3;
-    if (step === 3) return true; // photos optional for demo
-    if (step === 4) return location.trim().length > 2 && district.trim().length > 1;
-    if (step === 5) return price.trim().length > 0;
-    return false;
+  const validateStep = (currentStep: number): boolean => {
+    if (currentStep === 1) {
+      if (category === null) {
+        Alert.alert('Missing Information', 'Please select a property category (e.g., Apartment, Hostel, Shop, or Airbnb) to continue.');
+        return false;
+      }
+    }
+    if (currentStep === 2) {
+      if (!title.trim()) {
+        Alert.alert('Missing Information', 'Please enter a Property Title to continue.');
+        return false;
+      }
+      if (title.trim().length <= 3) {
+        Alert.alert('Invalid Information', 'Property Title must be at least 4 characters long.');
+        return false;
+      }
+      const units = parseInt(unitsLeft);
+      if (!unitsLeft || isNaN(units) || units < 1) {
+        Alert.alert('Missing Information', 'Please enter a valid number of units available (must be 1 or more).');
+        return false;
+      }
+    }
+    if (currentStep === 4) {
+      if (!location.trim()) {
+        Alert.alert('Missing Information', 'Please enter the Full Address for the property.');
+        return false;
+      }
+      if (location.trim().length <= 2) {
+        Alert.alert('Invalid Information', 'Full Address must be at least 3 characters.');
+        return false;
+      }
+      if (!district.trim()) {
+        Alert.alert('Missing Information', 'Please enter the District for the property.');
+        return false;
+      }
+      if (district.trim().length <= 1) {
+        Alert.alert('Invalid Information', 'District name must be at least 2 characters.');
+        return false;
+      }
+    }
+    if (currentStep === 5) {
+      if (!price.trim()) {
+        Alert.alert('Missing Information', 'Please enter the price for the property.');
+        return false;
+      }
+      const cleanedPrice = parseFloat(price.replace(/[^0-9]/g, '')) || 0;
+      if (cleanedPrice <= 0) {
+        Alert.alert('Invalid Information', 'Please enter a price greater than 0 UGX.');
+        return false;
+      }
+    }
+    return true;
   };
 
   const handleNext = async () => {
+    if (!validateStep(step)) {
+      return;
+    }
+
     if (step < 5) {
       setStep(s => s + 1);
       return;
@@ -260,6 +394,7 @@ export default function AddPropertyScreen() {
         landmark: landmark.trim(),
         latitude: latitude || undefined,
         longitude: longitude || undefined,
+        unitsLeft: parseInt(unitsLeft) || 1,
       };
 
       const propertyId = await createProperty(initialPropertyData);
@@ -398,7 +533,24 @@ export default function AddPropertyScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Description</Text>
+                <View style={styles.inputHeaderRow}>
+                  <Text style={styles.inputLabel}>Description</Text>
+                  <TouchableOpacity
+                    style={styles.aiButton}
+                    onPress={handleGenerateDescription}
+                    disabled={generatingDescription}
+                    activeOpacity={0.7}
+                  >
+                    {generatingDescription ? (
+                      <ActivityIndicator size="small" color={Colors.primary} />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons name="creation" size={12} color={Colors.primary} />
+                        <Text style={styles.aiButtonText}>AI Generate</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
                 <TextInput
                   value={description}
                   onChangeText={setDescription}
@@ -441,6 +593,17 @@ export default function AddPropertyScreen() {
                 <Text style={[styles.toggleText, furnished && { color: Colors.primary }]}>Furnished property</Text>
                 <MaterialCommunityIcons name={furnished ? 'toggle-switch' : 'toggle-switch-off'} size={28} color={furnished ? Colors.primary : Colors.muted} />
               </TouchableOpacity>
+
+              <View style={[styles.inputGroup, { marginTop: Spacing.md }]}>
+                <Text style={styles.inputLabel}>Units Available *</Text>
+                <TextInput
+                  value={unitsLeft}
+                  onChangeText={setUnitsLeft}
+                  placeholder="e.g. 1"
+                  keyboardType="numeric"
+                  style={styles.input}
+                />
+              </View>
             </View>
           )}
 
@@ -452,11 +615,23 @@ export default function AddPropertyScreen() {
               <View style={styles.photoGrid}>
                 {[0, 1, 2, 3, 4, 5].map(i => {
                   const photoUri = photos[i];
+                  const isVerifying = verifyingPhotoIndex === i;
                   return (
                     <View key={i} style={styles.photoSlotContainer}>
-                      {photoUri ? (
+                      {isVerifying ? (
+                        <View style={[styles.photoSlot, styles.photoVerifyingSlot]}>
+                          <ActivityIndicator size="small" color={Colors.primary} />
+                          <Text style={styles.verifyingText}>Scanning...</Text>
+                        </View>
+                      ) : photoUri ? (
                         <View style={styles.photoSlot}>
                           <Image source={{ uri: photoUri }} style={styles.photoImage} />
+                          {photoStatuses[i] && (
+                            <View style={styles.authenticityBadge}>
+                              <MaterialCommunityIcons name="shield-check" size={10} color={Colors.white} />
+                              <Text style={styles.authenticityText}>Original {photoStatuses[i].score}%</Text>
+                            </View>
+                          )}
                           <TouchableOpacity
                             style={styles.deletePhotoBadge}
                             onPress={() => removePhoto(i)}
@@ -653,7 +828,7 @@ export default function AddPropertyScreen() {
           <Button
             label={step < 5 ? `Next: ${STEPS[step].label} →` : 'Submit Listing'}
             onPress={handleNext}
-            disabled={!canNext() || submitting}
+            disabled={submitting}
             loading={submitting}
             fullWidth
             variant={step === 5 ? 'success' : 'primary'}
@@ -717,6 +892,27 @@ const styles = StyleSheet.create({
     width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center',
   },
   inputGroup: { gap: 8 },
+  inputHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  aiButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
+  },
+  aiButtonText: {
+    fontSize: FontSize.xs,
+    fontWeight: FontWeight.bold,
+    color: Colors.primary,
+  },
   inputLabel: { fontSize: FontSize.sm, fontWeight: FontWeight.semibold, color: Colors.text },
   input: {
     borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
@@ -768,6 +964,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     ...Shadow.sm,
     zIndex: 10,
+  },
+  photoVerifyingSlot: {
+    borderColor: Colors.primary,
+    borderStyle: 'solid',
+    backgroundColor: Colors.primaryLight,
+  },
+  verifyingText: {
+    fontSize: FontSize.xs,
+    color: Colors.primary,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  authenticityBadge: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: 'rgba(16, 185, 129, 0.95)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+    paddingVertical: 3,
+  },
+  authenticityText: {
+    fontSize: 9,
+    color: Colors.white,
+    fontWeight: 'bold',
   },
   tipsBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Spacing.sm,

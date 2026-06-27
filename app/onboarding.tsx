@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   View, Text, StyleSheet, FlatList, Dimensions,
   TouchableOpacity, ImageBackground, NativeSyntheticEvent, NativeScrollEvent,
@@ -9,6 +9,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import * as SplashScreen from 'expo-splash-screen';
 import { Colors } from '../constants/colors';
 import { FontSize, FontWeight, Radius, Spacing, Shadow } from '../constants/theme';
 
@@ -59,6 +60,10 @@ export default function OnboardingScreen() {
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const flatListRef = useRef<FlatList<Slide>>(null);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    SplashScreen.hideAsync().catch(() => {});
+  }, []);
 
   const updateCurrentSlideIndex = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const contentOffsetX = e.nativeEvent.contentOffset.x;

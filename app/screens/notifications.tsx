@@ -38,18 +38,18 @@ export default function NotificationsScreen() {
     const notificationsRef = collection(db, 'notifications');
     const q = query(
       notificationsRef,
-      where('recipientId', '==', user.id),
-      orderBy('createdAt', 'desc')
+      where('recipientId', '==', user.id)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot: any) => {
-      const list: NotificationItem[] = [];
+      const list: any[] = [];
       snapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
         list.push({
           id: docSnap.id,
           title: data.title || 'Notification',
           message: data.message || '',
+          timeRaw: data.createdAt ? new Date(data.createdAt).getTime() : 0,
           time: data.createdAt 
             ? new Date(data.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
             : 'Just now',
@@ -57,6 +57,9 @@ export default function NotificationsScreen() {
           type: data.type || 'alert',
         });
       });
+
+      // Sort by time descending client-side
+      list.sort((a, b) => b.timeRaw - a.timeRaw);
 
       setNotifications(list);
       setLoading(false);
