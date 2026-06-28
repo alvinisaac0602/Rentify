@@ -1,6 +1,5 @@
-import { StatusBar } from 'expo-status-bar';
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -9,35 +8,77 @@ import { Colors } from '../../constants/colors';
 import { FontSize, FontWeight, Radius, Shadow, Spacing } from '../../constants/theme';
 import { Button } from '../../components/ui/Button';
 import { MOVER_PROVIDERS } from '../../constants/mockData';
+import { useAuth } from '../../context/AuthContext';
+import { addDoc, collection } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 export default function MoversScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const [bookingMoverId, setBookingMoverId] = useState<string | null>(null);
 
-  const handleCallMovers = (moverName: string) => {
-    const { Linking } = require('react-native');
+  const handleBookMover = async (mover: typeof MOVER_PROVIDERS[0]) => {
+    if (!user) {
+      Alert.alert(
+        'Authentication Required',
+        'Please log in or sign up to book moving services.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Login', onPress: () => router.push('/screens/auth' as any) }
+        ]
+      );
+      return;
+    }
+
     Alert.alert(
-      `Book ${moverName}`,
-      "Contact our partner moving services to schedule your move:",
+      `Confirm Booking`,
+      `Request a booking with ${mover.name}?\n\nAn agent will call you at ${user.phone || 'your registered number'} to coordinate.`,
       [
+        { text: 'Cancel', style: 'cancel' },
         {
-          text: "📞 Call Service 1 (0789186476)",
-          onPress: () => {
-            Linking.openURL("tel:0789186476").catch(() => {
-              Alert.alert("Error", "Could not place call to 0789186476");
-            });
+          text: 'Request Booking',
+          onPress: async () => {
+            setBookingMoverId(mover.id);
+            try {
+              const bookingData = {
+                bookingId: `RT-MOVE-${Math.floor(100000 + Math.random() * 900000)}`,
+                userId: user.id,
+                customerName: user.name || 'Rentify User',
+                customerPhone: user.phone || '',
+                moverId: mover.id,
+                moverName: mover.name,
+                priceEstimate: mover.priceEstimate,
+                status: 'pending',
+                createdAt: new Date().toISOString(),
+              };
+
+              // 1. Save moving booking request to Firestore
+              await addDoc(collection(db, 'movingBookings'), bookingData);
+
+              // 2. Alert and call option
+              Alert.alert(
+                '🎉 Request Placed!',
+                `${mover.name} has received your request. You can also call them directly:`,
+                [
+                  {
+                    text: '📞 Call Mover (0789186476)',
+                    onPress: () => {
+                      const { Linking } = require('react-native');
+                      Linking.openURL("tel:0789186476").catch(() => {
+                        Alert.alert("Error", "Could not place call to 0789186476");
+                      });
+                    }
+                  },
+                  { text: 'Done', style: 'default' }
+                ]
+              );
+            } catch (e: any) {
+              console.log('Error creating moving booking:', e);
+              Alert.alert('Booking Failed', 'Unable to place request. Please try again.');
+            } finally {
+              setBookingMoverId(null);
+            }
           }
-        },
-        {
-          text: "📞 Call Service 2 (0741319191)",
-          onPress: () => {
-            Linking.openURL("tel:0741319191").catch(() => {
-              Alert.alert("Error", "Could not place call to 0741319191");
-            });
-          }
-        },
-        {
-          text: "Cancel",
-          style: "cancel"
         }
       ]
     );
@@ -45,7 +86,6 @@ export default function MoversScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar style="auto" />
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
           <MaterialCommunityIcons name="arrow-left" size={22} color={Colors.text} />
@@ -79,7 +119,11 @@ export default function MoversScreen() {
                 </View>
               </View>
             </View>
-            <Button label="Book" onPress={() => handleCallMovers(mover.name)} size="sm" />
+            {bookingMoverId === mover.id ? (
+              <ActivityIndicator color={Colors.primary} style={{ marginRight: 12 }} />
+            ) : (
+              <Button label="Book" onPress={() => handleBookMover(mover)} size="sm" />
+            )}
           </View>
         ))}
 

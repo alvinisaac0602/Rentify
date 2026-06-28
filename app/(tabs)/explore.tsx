@@ -15,13 +15,8 @@ import { useAuth } from '../../context/AuthContext';
 import { Button } from '../../components/ui/Button';
 import { FilterModal, DEFAULT_FILTERS, countActiveFilters } from '../../components/modals/FilterModal';
 import { fetchProperties } from '../../services/firebaseServices';
-
-const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
-  all: [0, Infinity],
-  budget: [0, 700000],
-  mid: [700001, 3000000],
-  premium: [3000001, Infinity],
-};
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
 export default function ExploreScreen() {
   const params = useLocalSearchParams<{
@@ -30,13 +25,14 @@ export default function ExploreScreen() {
     verifiedOnly?: string;
     furnished?: string;
     district?: string;
-    priceRange?: string;
+    minPrice?: string;
+    maxPrice?: string;
     bedrooms?: string;
     bathrooms?: string;
     minTrustScore?: string;
   }>();
   const router = useRouter();
-  const { requireAuth } = useAuth();
+  const { user, requireAuth } = useAuth();
 
   const [searchQuery, setSearchQuery] = useState(params.q ?? '');
   const [filters, setFilters] = useState<FilterState>({
@@ -45,6 +41,37 @@ export default function ExploreScreen() {
   });
   const [savedIds, setSavedIds] = useState<string[]>([]);
   const [dbProperties, setDbProperties] = useState<Property[]>([]);
+  const [realUserIds, setRealUserIds] = useState<string[]>([]);
+  const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
+
+  // Real-time users listener to exclude properties owned by non-existent/mock landlords
+  useEffect(() => {
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snapshot) => {
+      const ids = snapshot.docs.map(doc => doc.id);
+      setRealUserIds(ids);
+    }, (err) => {
+      console.log('Error listening to users:', err);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Real-time blocked users listener
+  useEffect(() => {
+    if (!user) {
+      setBlockedUserIds([]);
+      return;
+    }
+    const blocksRef = collection(db, 'blocks');
+    const q = query(blocksRef, where('userId', '==', user.id));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const blocked = snapshot.docs.map(doc => doc.data().blockedUserId);
+      setBlockedUserIds(blocked);
+    }, (err) => {
+      console.log('Error listening to blocks:', err);
+    });
+    return () => unsubscribe();
+  }, [user]);
 
   const loadDbProperties = async () => {
     try {
@@ -76,7 +103,9 @@ export default function ExploreScreen() {
         verifiedOnly: params.verifiedOnly !== undefined ? params.verifiedOnly === 'true' : prev.verifiedOnly,
         furnished: (params.furnished as any) ?? prev.furnished,
         district: params.district ?? prev.district,
-        priceRange: (params.priceRange as any) ?? prev.priceRange,
+        priceRange: 'all',
+        minPrice: params.minPrice !== undefined ? parseInt(params.minPrice) : prev.minPrice,
+        maxPrice: params.maxPrice !== undefined ? parseInt(params.maxPrice) : prev.maxPrice,
         bedrooms: params.bedrooms !== undefined
           ? (params.bedrooms === 'any' || params.bedrooms === '4+' ? params.bedrooms : (parseInt(params.bedrooms) as any))
           : prev.bedrooms,
@@ -90,11 +119,17 @@ export default function ExploreScreen() {
   }, [JSON.stringify(params)]);
 
   const allProperties = useMemo(() => {
-    return dbProperties;
-  }, [dbProperties]);
+    let list = dbProperties;
+    if (realUserIds.length > 0) {
+      list = list.filter(p => realUserIds.includes(p.landlordId));
+    }
+    if (blockedUserIds.length === 0) return list;
+    return list.filter(p => !blockedUserIds.includes(p.landlordId));
+  }, [dbProperties, blockedUserIds, realUserIds]);
 
   const filtered = useMemo(() => {
-    const [minPrice, maxPrice] = PRICE_THRESHOLDS[filters.priceRange];
+    const minPrice = filters.minPrice > 0 ? filters.minPrice : 0;
+    const maxPrice = filters.maxPrice > 0 ? filters.maxPrice : Infinity;
     return allProperties.filter(p => {
       if (filters.category !== 'all' && p.category !== filters.category) return false;
       if (filters.verifiedOnly && !p.isVerified) return false;
@@ -196,7 +231,8 @@ export default function ExploreScreen() {
                 verifiedOnly: String(filters.verifiedOnly),
                 furnished: filters.furnished,
                 district: filters.district,
-                priceRange: filters.priceRange,
+                minPrice: String(filters.minPrice),
+                maxPrice: String(filters.maxPrice),
                 bedrooms: String(filters.bedrooms),
                 bathrooms: String(filters.bathrooms),
                 minTrustScore: String(filters.minTrustScore),

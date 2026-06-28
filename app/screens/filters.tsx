@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch,
+  View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -13,6 +13,12 @@ import { Button } from '../../components/ui/Button';
 import { DISTRICTS } from '../../constants/mockData';
 import { DEFAULT_FILTERS } from '../../components/modals/FilterModal';
 
+const fmt = (v: string) => {
+  const clean = v.replace(/[^0-9]/g, '');
+  if (!clean) return '';
+  return Number(clean).toLocaleString('en-US');
+};
+
 export default function FiltersScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
@@ -20,7 +26,8 @@ export default function FiltersScreen() {
     verifiedOnly?: string;
     furnished?: string;
     district?: string;
-    priceRange?: string;
+    minPrice?: string;
+    maxPrice?: string;
     bedrooms?: string;
     bathrooms?: string;
     minTrustScore?: string;
@@ -29,14 +36,15 @@ export default function FiltersScreen() {
 
   const from = params.from ?? 'index';
 
-  // Parse filters from parameters
   const getInitialFilters = (): FilterState => {
     return {
       category: (params.category as any) ?? 'all',
       verifiedOnly: params.verifiedOnly === 'true',
       furnished: (params.furnished as any) ?? 'any',
       district: params.district ?? 'All',
-      priceRange: (params.priceRange as any) ?? 'all',
+      priceRange: 'all',
+      minPrice: params.minPrice ? parseInt(params.minPrice) : 0,
+      maxPrice: params.maxPrice ? parseInt(params.maxPrice) : 0,
       bedrooms: params.bedrooms
         ? (params.bedrooms === 'any' || params.bedrooms === '4+' ? params.bedrooms : (parseInt(params.bedrooms) as any))
         : 'any',
@@ -48,18 +56,26 @@ export default function FiltersScreen() {
   };
 
   const [temp, setTemp] = useState<FilterState>(DEFAULT_FILTERS);
+  const [minPriceText, setMinPriceText] = useState('');
+  const [maxPriceText, setMaxPriceText] = useState('');
 
-  // Initialize once params are loaded
   useEffect(() => {
-    setTemp(getInitialFilters());
+    const init = getInitialFilters();
+    setTemp(init);
+    setMinPriceText(init.minPrice > 0 ? init.minPrice.toLocaleString('en-US') : '');
+    setMaxPriceText(init.maxPrice > 0 ? init.maxPrice.toLocaleString('en-US') : '');
   }, [params]);
 
   const set = (patch: Partial<FilterState>) => setTemp((t: FilterState) => ({ ...t, ...patch }));
-  const reset = () => setTemp({ ...DEFAULT_FILTERS, category: temp.category });
-  
+  const reset = () => {
+    setTemp({ ...DEFAULT_FILTERS, category: temp.category });
+    setMinPriceText('');
+    setMaxPriceText('');
+  };
+
   const apply = () => {
-    // Route to '/' for home tab (index) and '/explore' for explore tab.
-    // Using '/' ensures useLocalSearchParams in index.tsx receives the params correctly.
+    const minP = parseInt(minPriceText.replace(/[^0-9]/g, '') || '0');
+    const maxP = parseInt(maxPriceText.replace(/[^0-9]/g, '') || '0');
     const target = from === 'explore' ? '/explore' : '/';
     router.replace({
       pathname: target as any,
@@ -68,7 +84,8 @@ export default function FiltersScreen() {
         verifiedOnly: String(temp.verifiedOnly),
         furnished: temp.furnished,
         district: temp.district,
-        priceRange: temp.priceRange,
+        minPrice: String(minP),
+        maxPrice: String(maxP),
         bedrooms: String(temp.bedrooms),
         bathrooms: String(temp.bathrooms),
         minTrustScore: String(temp.minTrustScore),
@@ -78,8 +95,6 @@ export default function FiltersScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar style="auto" />
-      
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
@@ -91,7 +106,11 @@ export default function FiltersScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.body}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+      >
 
         {/* ── Category ──────────────────────────────── */}
         <View style={styles.section}>
@@ -115,19 +134,39 @@ export default function FiltersScreen() {
 
         {/* ── Price Range ───────────────────────────── */}
         <View style={styles.section}>
-          <Text style={styles.label}>Price Budget</Text>
-          <View style={styles.seg}>
-            {(['all', 'budget', 'mid', 'premium'] as const).map(r => {
-              const active = temp.priceRange === r;
-              const lbl = { all: 'Any', budget: 'Budget', mid: 'Mid-Range', premium: 'Premium' }[r];
-              return (
-                <TouchableOpacity key={r} style={[styles.segBtn, active && styles.activeSegBtn]}
-                  onPress={() => set({ priceRange: r })}>
-                  <Text style={[styles.segTxt, active && styles.activeSegTxt]}>{lbl}</Text>
-                </TouchableOpacity>
-              );
-            })}
+          <Text style={styles.label}>Price Range (UGX)</Text>
+          <View style={styles.priceRow}>
+            <View style={styles.priceInputWrap}>
+              <Text style={styles.priceLabel}>Min Price</Text>
+              <TextInput
+                style={styles.priceInput}
+                value={minPriceText}
+                onChangeText={v => setMinPriceText(fmt(v))}
+                placeholder="e.g. 200,000"
+                placeholderTextColor={Colors.placeholder}
+                keyboardType="numeric"
+                returnKeyType="done"
+              />
+            </View>
+            <MaterialCommunityIcons name="minus" size={16} color={Colors.muted} style={{ marginTop: 22 }} />
+            <View style={styles.priceInputWrap}>
+              <Text style={styles.priceLabel}>Max Price</Text>
+              <TextInput
+                style={styles.priceInput}
+                value={maxPriceText}
+                onChangeText={v => setMaxPriceText(fmt(v))}
+                placeholder="e.g. 3,000,000"
+                placeholderTextColor={Colors.placeholder}
+                keyboardType="numeric"
+                returnKeyType="done"
+              />
+            </View>
           </View>
+          {(minPriceText || maxPriceText) && (
+            <TouchableOpacity onPress={() => { setMinPriceText(''); setMaxPriceText(''); }} style={styles.clearPrice}>
+              <Text style={styles.clearPriceText}>✕ Clear price range</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── Bedrooms ──────────────────────────────── */}
@@ -283,6 +322,16 @@ const styles = StyleSheet.create({
   activeSegBtn: { backgroundColor: Colors.white, ...Shadow.sm },
   segTxt: { fontSize: FontSize.sm, fontWeight: FontWeight.medium, color: Colors.textSecondary },
   activeSegTxt: { color: Colors.text, fontWeight: FontWeight.bold },
+  priceRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.sm },
+  priceInputWrap: { flex: 1, gap: 4 },
+  priceLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.muted },
+  priceInput: {
+    borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md, paddingVertical: 10,
+    fontSize: FontSize.sm, color: Colors.text, backgroundColor: Colors.surface,
+  },
+  clearPrice: { marginTop: Spacing.sm, alignSelf: 'flex-end' },
+  clearPriceText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.semibold },
   toggleRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: Spacing.md,

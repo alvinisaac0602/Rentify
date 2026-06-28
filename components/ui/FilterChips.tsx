@@ -9,7 +9,9 @@ export interface FilterState {
   verifiedOnly: boolean;
   furnished: 'any' | 'furnished' | 'unfurnished';
   district: string;
-  priceRange: 'all' | 'budget' | 'mid' | 'premium';
+  priceRange: 'all' | 'budget' | 'mid' | 'premium'; // kept for backward compat; use minPrice/maxPrice for actual filtering
+  minPrice: number;
+  maxPrice: number;
   bedrooms: 'any' | 1 | 2 | 3 | '4+';
   bathrooms: 'any' | 1 | 2 | '3+';
   minTrustScore: number;
@@ -28,14 +30,7 @@ const CATEGORIES: { key: FilterState['category']; label: string; emoji: string }
   { key: 'airbnb', label: 'Airbnbs', emoji: '🏨' },
 ];
 
-const PRICE_RANGES: { key: FilterState['priceRange']; label: string }[] = [
-  { key: 'all', label: 'Any Price' },
-  { key: 'budget', label: 'Budget' },
-  { key: 'mid', label: 'Mid-Range' },
-  { key: 'premium', label: 'Premium' },
-];
-
-const DISTRICTS = ['All Districts', 'Kampala', 'Wakiso', 'Ntinda', 'Kira', 'Mukono', 'Entebbe'];
+const DISTRICTS = ['All Districts', 'Kampala', 'Wakiso', 'Mukono', 'Entebbe'];
 
 export function FilterChips({ filters, onChange }: FilterChipsProps) {
   const toggle = (key: keyof FilterState, value: any) => {
@@ -92,23 +87,6 @@ export function FilterChips({ filters, onChange }: FilterChipsProps) {
       >
         <Text style={[styles.chipText, filters.furnished === 'furnished' && styles.activeText]}>Furnished</Text>
       </TouchableOpacity>
-
-      <View style={styles.divider} />
-
-      {/* Price Ranges */}
-      {PRICE_RANGES.map(p => {
-        const active = filters.priceRange === p.key;
-        return (
-          <TouchableOpacity
-            key={p.key}
-            activeOpacity={0.75}
-            onPress={() => toggle('priceRange', p.key)}
-            style={[styles.chip, active && styles.activeChip]}
-          >
-            <Text style={[styles.chipText, active && styles.activeText]}>{p.label}</Text>
-          </TouchableOpacity>
-        );
-      })}
 
       <View style={styles.divider} />
 

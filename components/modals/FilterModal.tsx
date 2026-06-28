@@ -1,7 +1,6 @@
-import { StatusBar } from 'expo-status-bar';
 import React, { useState, useEffect } from 'react';
 import {
-  Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch,
+  Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView, Switch, TextInput,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Colors } from '../../constants/colors';
@@ -16,6 +15,8 @@ export const DEFAULT_FILTERS: FilterState = {
   furnished: 'any',
   district: 'All',
   priceRange: 'all',
+  minPrice: 0,
+  maxPrice: 0,
   bedrooms: 'any',
   bathrooms: 'any',
   minTrustScore: 0,
@@ -26,12 +27,18 @@ export function countActiveFilters(f: FilterState): number {
   if (f.verifiedOnly) n++;
   if (f.furnished !== 'any') n++;
   if (f.district !== 'All') n++;
-  if (f.priceRange !== 'all') n++;
+  if (f.minPrice > 0 || f.maxPrice > 0) n++;
   if (f.bedrooms !== 'any') n++;
   if (f.bathrooms !== 'any') n++;
   if (f.minTrustScore > 0) n++;
   return n;
 }
+
+const fmt = (v: string) => {
+  const clean = v.replace(/[^0-9]/g, '');
+  if (!clean) return '';
+  return Number(clean).toLocaleString('en-US');
+};
 
 interface Props {
   visible: boolean;
@@ -43,16 +50,32 @@ interface Props {
 
 export function FilterModal({ visible, onClose, filters, onApply, showCategoryFilter = true }: Props) {
   const [temp, setTemp] = useState<FilterState>({ ...filters });
+  const [minPriceText, setMinPriceText] = useState('');
+  const [maxPriceText, setMaxPriceText] = useState('');
 
-  useEffect(() => { if (visible) setTemp({ ...filters }); }, [visible]);
+  useEffect(() => {
+    if (visible) {
+      setTemp({ ...filters });
+      setMinPriceText(filters.minPrice > 0 ? filters.minPrice.toLocaleString('en-US') : '');
+      setMaxPriceText(filters.maxPrice > 0 ? filters.maxPrice.toLocaleString('en-US') : '');
+    }
+  }, [visible]);
 
   const set = (patch: Partial<FilterState>) => setTemp(t => ({ ...t, ...patch }));
-  const reset = () => setTemp({ ...DEFAULT_FILTERS, category: filters.category });
-  const apply = () => { onApply(temp); onClose(); };
+  const reset = () => {
+    setTemp({ ...DEFAULT_FILTERS, category: filters.category });
+    setMinPriceText('');
+    setMaxPriceText('');
+  };
+  const apply = () => {
+    const minP = parseInt(minPriceText.replace(/[^0-9]/g, '') || '0');
+    const maxP = parseInt(maxPriceText.replace(/[^0-9]/g, '') || '0');
+    onApply({ ...temp, minPrice: minP, maxPrice: maxP });
+    onClose();
+  };
 
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <StatusBar style="auto" />
       <View style={s.overlay}>
         <TouchableOpacity style={s.overlayDismiss} activeOpacity={1} onPress={onClose} />
         <View style={s.sheet}>
@@ -70,7 +93,11 @@ export function FilterModal({ visible, onClose, filters, onApply, showCategoryFi
             </View>
           </View>
 
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.body}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={s.body}
+            keyboardShouldPersistTaps="handled"
+          >
 
             {/* ── Category ──────────────────────────────── */}
             {showCategoryFilter && (
@@ -96,19 +123,39 @@ export function FilterModal({ visible, onClose, filters, onApply, showCategoryFi
 
             {/* ── Price Range ───────────────────────────── */}
             <View style={s.section}>
-              <Text style={s.label}>Price Budget</Text>
-              <View style={s.seg}>
-                {(['all', 'budget', 'mid', 'premium'] as const).map(r => {
-                  const active = temp.priceRange === r;
-                  const lbl = { all: 'Any', budget: 'Budget', mid: 'Mid-Range', premium: 'Premium' }[r];
-                  return (
-                    <TouchableOpacity key={r} style={[s.segBtn, active && s.activeSegBtn]}
-                      onPress={() => set({ priceRange: r })}>
-                      <Text style={[s.segTxt, active && s.activeSegTxt]}>{lbl}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              <Text style={s.label}>Price Range (UGX)</Text>
+              <View style={s.priceRow}>
+                <View style={s.priceInputWrap}>
+                  <Text style={s.priceLabel}>Min</Text>
+                  <TextInput
+                    style={s.priceInput}
+                    value={minPriceText}
+                    onChangeText={v => setMinPriceText(fmt(v))}
+                    placeholder="e.g. 200,000"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                  />
+                </View>
+                <MaterialCommunityIcons name="minus" size={16} color={Colors.muted} style={{ marginTop: 18 }} />
+                <View style={s.priceInputWrap}>
+                  <Text style={s.priceLabel}>Max</Text>
+                  <TextInput
+                    style={s.priceInput}
+                    value={maxPriceText}
+                    onChangeText={v => setMaxPriceText(fmt(v))}
+                    placeholder="e.g. 3,000,000"
+                    placeholderTextColor={Colors.placeholder}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                  />
+                </View>
               </View>
+              {(minPriceText || maxPriceText) && (
+                <TouchableOpacity onPress={() => { setMinPriceText(''); setMaxPriceText(''); }} style={s.clearPrice}>
+                  <Text style={s.clearPriceText}>Clear price range</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* ── Bedrooms ──────────────────────────────── */}
@@ -277,6 +324,17 @@ const s = StyleSheet.create({
   activeSegBtn: { backgroundColor: Colors.white, ...Shadow.sm },
   segTxt: { fontSize: FontSize.sm, fontWeight: FontWeight.medium, color: Colors.textSecondary },
   activeSegTxt: { color: Colors.text, fontWeight: FontWeight.bold },
+  // Price inputs
+  priceRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.sm },
+  priceInputWrap: { flex: 1, gap: 4 },
+  priceLabel: { fontSize: FontSize.xs, fontWeight: FontWeight.semibold, color: Colors.muted },
+  priceInput: {
+    borderWidth: 1.5, borderColor: Colors.border, borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md, paddingVertical: 10,
+    fontSize: FontSize.sm, color: Colors.text, backgroundColor: Colors.surfaceSecondary,
+  },
+  clearPrice: { marginTop: Spacing.sm, alignSelf: 'flex-end' },
+  clearPriceText: { fontSize: FontSize.xs, color: Colors.primary, fontWeight: FontWeight.semibold },
   toggleRow: {
     flexDirection: 'row', alignItems: 'center',
     paddingVertical: Spacing.md,

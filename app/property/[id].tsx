@@ -18,6 +18,7 @@ import { AmenityTag } from '../../components/ui/AmenityTag';
 import { Button } from '../../components/ui/Button';
 import { useAuth } from '../../context/AuthContext';
 import { MapView } from '../../components/ui/MapView';
+import { Avatar } from '../../components/ui/Avatar';
 
 const { width } = Dimensions.get('window');
 
@@ -111,27 +112,27 @@ export default function PropertyDetailsScreen() {
               setLandlord({
                 id: propData.landlordId,
                 name: userData.displayName || userData.name || 'Landlord',
-                avatar: userData.avatarUrl || userData.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+                avatar: userData.avatarUrl || userData.avatar || '',
                 isVerified: !!userData.isVerified,
-                rating: userData.rating || 4.9,
-                responseTime: userData.responseTime || 'within 15 minutes',
-                properties: userData.propertiesCount || 1,
+                rating: userData.rating || 0,
+                responseTime: userData.responseTime || 'typical',
+                properties: userData.propertiesCount || 0,
                 joinedDate: getJoinedDate(userData.createdAt),
-                phone: userData.phoneNumber || userData.phone || '+256 700 000000',
-                trustScore: userData.trustScore || (userData.isVerified ? 98 : 70),
+                phone: userData.phoneNumber || userData.phone || '',
+                trustScore: userData.trustScore || (userData.isVerified ? 90 : 60),
               });
             } else {
               setLandlord({
                 id: propData.landlordId,
                 name: 'Rentify Member',
-                avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=120&q=80',
+                avatar: '',
                 isVerified: false,
-                rating: 5.0,
-                responseTime: 'instantly',
-                properties: 1,
-                joinedDate: 'June 2026',
-                phone: '+256 700 000000',
-                trustScore: 70,
+                rating: 0,
+                responseTime: 'typical',
+                properties: 0,
+                joinedDate: 'Joined recently',
+                phone: '',
+                trustScore: 60,
               });
             }
           });
@@ -389,11 +390,13 @@ export default function PropertyDetailsScreen() {
 
           {/* Rating + Location */}
           <View style={styles.infoRow}>
-            <View style={styles.ratingRow}>
-              <MaterialCommunityIcons name="star" size={15} color={Colors.warning} />
-              <Text style={styles.rating}>{property.rating}</Text>
-              <Text style={styles.reviewCount}>({property.reviewCount} reviews)</Text>
-            </View>
+            {property.reviewCount !== undefined && property.reviewCount > 0 ? (
+              <View style={styles.ratingRow}>
+                <MaterialCommunityIcons name="star" size={15} color={Colors.warning} />
+                <Text style={styles.rating}>{property.rating}</Text>
+                <Text style={styles.reviewCount}>({property.reviewCount} reviews)</Text>
+              </View>
+            ) : null}
             <View style={styles.locationRow}>
               <MaterialCommunityIcons name="map-marker" size={14} color={Colors.muted} />
               <Text style={styles.location}>{property.location}</Text>
@@ -485,7 +488,7 @@ export default function PropertyDetailsScreen() {
 
           {/* ─── Landlord Card ───────────────────────── */}
           <View style={[styles.section, styles.landlordCard]}>
-            <Image source={{ uri: landlord.avatar }} style={styles.avatar} />
+            <Avatar name={landlord.name} uri={landlord.avatar} size={52} style={styles.avatar} />
             <View style={{ flex: 1 }}>
               <View style={styles.landlordNameRow}>
                 <Text style={styles.landlordName}>{landlord.name}</Text>
@@ -494,27 +497,29 @@ export default function PropertyDetailsScreen() {
                 )}
               </View>
               <Text style={styles.landlordMeta}>
-                {landlord.properties} listings · Joined {landlord.joinedDate}
+                {landlord.properties} {landlord.properties === 1 ? 'listing' : 'listings'} · {landlord.joinedDate}
               </Text>
               <View style={styles.responseRow}>
                 <MaterialCommunityIcons name="clock-outline" size={13} color={Colors.muted} />
                 <Text style={styles.responseText}>Responds {landlord.responseTime}</Text>
               </View>
-              <TouchableOpacity 
-                style={[styles.responseRow, { marginTop: 4 }]} 
-                onPress={() => {
-                  const { Linking } = require('react-native');
-                  Linking.openURL(`tel:${landlord.phone}`).catch(() => {
-                    Alert.alert('Error', 'Unable to open phone call screen');
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                <MaterialCommunityIcons name="phone-outline" size={13} color={Colors.primary} />
-                <Text style={[styles.responseText, { color: Colors.primary, fontWeight: 'bold' }]}>
-                  {landlord.phone}
-                </Text>
-              </TouchableOpacity>
+              {!!landlord.phone && (
+                <TouchableOpacity 
+                  style={[styles.responseRow, { marginTop: 4 }]} 
+                  onPress={() => {
+                    const { Linking } = require('react-native');
+                    Linking.openURL(`tel:${landlord.phone}`).catch(() => {
+                      Alert.alert('Error', 'Unable to open phone call screen');
+                    });
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <MaterialCommunityIcons name="phone-outline" size={13} color={Colors.primary} />
+                  <Text style={[styles.responseText, { color: Colors.primary, fontWeight: 'bold' }]}>
+                    {landlord.phone}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
             <View style={{ gap: Spacing.sm, alignItems: 'center' }}>
               <TouchableOpacity style={styles.chatIconBtn} onPress={handleChat}>

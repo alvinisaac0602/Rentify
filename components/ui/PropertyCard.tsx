@@ -15,9 +15,10 @@ interface PropertyCardProps {
   onSave?: () => void;
   isSaved?: boolean;
   horizontal?: boolean;
+  isFeaturedSection?: boolean;
 }
 
-export function PropertyCard({ property, onSave, isSaved = false, horizontal = false }: PropertyCardProps) {
+export function PropertyCard({ property, onSave, isSaved = false, horizontal = false, isFeaturedSection }: PropertyCardProps) {
   const router = useRouter();
   const { requireAuth } = useAuth();
   const meta = CategoryMeta[property.category as CategoryType];
@@ -65,55 +66,58 @@ export function PropertyCard({ property, onSave, isSaved = false, horizontal = f
             <Text style={[styles.price, { color: meta.color }]}>
               {formatPrice(property.price, property.currency, property.pricePeriod)}
             </Text>
-            <View style={styles.row}>
-              <MaterialCommunityIcons name="star" size={12} color={Colors.warning} />
-              <Text style={styles.rating}>{property.rating}</Text>
-            </View>
+            {property.reviewCount !== undefined && property.reviewCount > 0 ? (
+              <View style={styles.row}>
+                <MaterialCommunityIcons name="star" size={12} color={Colors.warning} />
+                <Text style={styles.rating}>{property.rating}</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       </TouchableOpacity>
     );
   }
 
-  return (
-    <TouchableOpacity
-      activeOpacity={0.88}
-      onPress={() => router.push(`/property/${property.id}` as any)}
-      style={[styles.card, Shadow.card]}
-    >
-      {/* Image */}
-      <View style={styles.imageContainer}>
-        <Image
-          source={{ uri: imgError ? 'https://picsum.photos/400/300' : property.images[0] }}
-          style={styles.image}
-          onError={() => setImgError(true)}
-          resizeMode="cover"
-        />
-        <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.25)']}
-          style={styles.imageGradient}
-        />
-
-        {/* Category badge */}
-        <View style={[styles.catBadgeOverlay, { backgroundColor: meta.color }]}>
-          <Text style={styles.catBadgeOverlayText}>{meta.emoji} {meta.label}</Text>
-        </View>
-
-        {/* Verified badge */}
-        {property.isVerified && (
-          <View style={styles.verifiedOverlay}>
-            <MaterialCommunityIcons name="shield-check" size={12} color={Colors.white} />
-            <Text style={styles.verifiedOverlayText}>Verified</Text>
+    const isFeatured = isFeaturedSection || !!(property.featuredUntil && property.featuredUntil > new Date().toISOString());
+    return (
+      <TouchableOpacity
+        activeOpacity={0.88}
+        onPress={() => router.push(`/property/${property.id}` as any)}
+        style={[styles.card, Shadow.card, isFeatured && styles.featuredCard]}
+      >
+        {/* Image */}
+        <View style={styles.imageContainer}>
+          <Image
+            source={{ uri: imgError ? 'https://picsum.photos/400/300' : property.images[0] }}
+            style={styles.image}
+            onError={() => setImgError(true)}
+            resizeMode="cover"
+          />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.25)']}
+            style={styles.imageGradient}
+          />
+  
+          {/* Category badge */}
+          <View style={[styles.catBadgeOverlay, { backgroundColor: meta.color }, isFeatured && { left: 82 }]}>
+            <Text style={styles.catBadgeOverlayText}>{meta.emoji} {meta.label}</Text>
           </View>
-        )}
-
-        {/* Featured badge */}
-        {property.featuredUntil && property.featuredUntil > new Date().toISOString() && (
-          <View style={styles.featuredOverlay}>
-            <MaterialCommunityIcons name="star-circle" size={10} color="#F59E0B" />
-            <Text style={styles.featuredOverlayText}>Featured</Text>
-          </View>
-        )}
+  
+          {/* Verified badge */}
+          {property.isVerified && (
+            <View style={styles.verifiedOverlay}>
+              <MaterialCommunityIcons name="shield-check" size={12} color={Colors.white} />
+              <Text style={styles.verifiedOverlayText}>Verified</Text>
+            </View>
+          )}
+  
+          {/* Featured badge */}
+          {isFeatured && (
+            <View style={styles.featuredOverlay}>
+              <MaterialCommunityIcons name="star" size={11} color={Colors.white} />
+              <Text style={styles.featuredOverlayText}>Featured</Text>
+            </View>
+          )}
 
         {/* Units Left overlay */}
         {property.unitsLeft !== undefined && property.unitsLeft <= 3 && (
@@ -149,11 +153,13 @@ export function PropertyCard({ property, onSave, isSaved = false, horizontal = f
           <Text style={[styles.price, { color: meta.color }]}>
             {formatPrice(property.price, property.currency, property.pricePeriod)}
           </Text>
-          <View style={styles.row}>
-            <MaterialCommunityIcons name="star" size={13} color={Colors.warning} />
-            <Text style={styles.rating}>{property.rating}</Text>
-            <Text style={styles.reviewCount}>({property.reviewCount})</Text>
-          </View>
+          {property.reviewCount !== undefined && property.reviewCount > 0 ? (
+            <View style={styles.row}>
+              <MaterialCommunityIcons name="star" size={13} color={Colors.warning} />
+              <Text style={styles.rating}>{property.rating}</Text>
+              <Text style={styles.reviewCount}>({property.reviewCount})</Text>
+            </View>
+          ) : null}
         </View>
       </View>
     </TouchableOpacity>
@@ -165,6 +171,16 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: Radius.xl,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  featuredCard: {
+    borderColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   imageContainer: {
     height: 185,

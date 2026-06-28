@@ -438,7 +438,7 @@ export default function AddPropertyScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={{ flex: 1 }}>
-        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -652,9 +652,11 @@ export default function AddPropertyScreen() {
                             size={28}
                             color={i === photos.length ? Colors.primary : Colors.muted}
                           />
-                          <Text style={[styles.photoSlotText, i === photos.length && { color: Colors.primary, fontWeight: '600' }]}>
-                            {i === 0 ? 'Cover Photo' : `Photo ${i + 1}`}
-                          </Text>
+                          {i === 0 && (
+                            <Text style={[styles.photoSlotText, { color: Colors.primary, fontWeight: '600', fontSize: 9 }]}>
+                              Cover
+                            </Text>
+                          )}
                         </TouchableOpacity>
                       )}
                     </View>

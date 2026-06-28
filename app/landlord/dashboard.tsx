@@ -1,4 +1,3 @@
-import { StatusBar } from 'expo-status-bar';
 import React, { useState, useCallback } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert,
@@ -13,7 +12,7 @@ import { Property } from '../../constants/mockData';
 import { useAuth } from '../../context/AuthContext';
 import { requestPropertyVerification } from '../../services/firebaseServices';
 import { VerificationModal } from '../../components/modals/VerificationModal';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 
 export default function LandlordDashboard() {
@@ -22,14 +21,17 @@ export default function LandlordDashboard() {
 
   const [myProperties, setMyProperties] = useState<Property[]>([]);
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [furnitureOrders, setFurnitureOrders] = useState<any[]>([]);
+  const [movingBookings, setMovingBookings] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'requests' | 'furniture' | 'movers'>('requests');
   const [loading, setLoading] = useState(true);
   const [landlordVerified, setLandlordVerified] = useState(false);
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [verifyingPropertyId, setVerifyingPropertyId] = useState<string | null>(null);
 
-  const fetchLandlordData = useCallback(async () => {
-    if (!user) return;
-    try {
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
       setLoading(true);
 
       const qProperties = query(
@@ -40,40 +42,77 @@ export default function LandlordDashboard() {
         collection(db, 'viewingRequests'),
         where('landlordId', '==', user.id)
       );
+      const qFurniture = query(
+        collection(db, 'furnitureOrders')
+      );
+      const qMoving = query(
+        collection(db, 'movingBookings')
+      );
 
-      const [snapProperties, snapRequests, userSnap] = await Promise.all([
-        getDocs(qProperties),
-        getDocs(qRequests),
-        getDoc(doc(db, 'users', user.id)),
-      ]);
-
-      const loadedProperties: Property[] = [];
-      snapProperties.forEach((docSnap: any) => {
-        loadedProperties.push({ id: docSnap.id, ...docSnap.data() });
+      const unsubProperties = onSnapshot(qProperties, (snap: any) => {
+        const loadedProperties: Property[] = [];
+        snap.forEach((docSnap: any) => {
+          loadedProperties.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        setMyProperties(loadedProperties);
+        setLoading(false);
+      }, (error) => {
+        console.log('Error listening to properties:', error);
+        setLoading(false);
       });
-      setMyProperties(loadedProperties);
 
-      const loadedRequests: any[] = [];
-      snapRequests.forEach((docSnap: any) => {
-        loadedRequests.push({ id: docSnap.id, ...docSnap.data() });
+      const unsubRequests = onSnapshot(qRequests, (snap: any) => {
+        const loadedRequests: any[] = [];
+        snap.forEach((docSnap: any) => {
+          loadedRequests.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        setPendingRequests(loadedRequests);
+      }, (error) => {
+        console.log('Error listening to requests:', error);
       });
-      setPendingRequests(loadedRequests);
 
-      // Check landlord verification
-      if (userSnap.exists()) {
-        setLandlordVerified(!!userSnap.data().isVerified);
-      } else {
-        setLandlordVerified(user.isVerified ?? false);
-      }
+      const unsubFurniture = onSnapshot(qFurniture, (snap: any) => {
+        const loadedFurniture: any[] = [];
+        snap.forEach((docSnap: any) => {
+          loadedFurniture.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        loadedFurniture.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setFurnitureOrders(loadedFurniture);
+      }, (error) => {
+        console.log('Error listening to furniture orders:', error);
+      });
 
-    } catch (error) {
-      console.log('Error fetching landlord data:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [user]);
+      const unsubMoving = onSnapshot(qMoving, (snap: any) => {
+        const loadedMoving: any[] = [];
+        snap.forEach((docSnap: any) => {
+          loadedMoving.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        loadedMoving.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        setMovingBookings(loadedMoving);
+      }, (error) => {
+        console.log('Error listening to moving bookings:', error);
+      });
 
-  useFocusEffect(useCallback(() => { fetchLandlordData(); }, [fetchLandlordData]));
+      const userRef = doc(db, 'users', user.id);
+      const unsubUser = onSnapshot(userRef, (userSnap: any) => {
+        if (userSnap.exists()) {
+          setLandlordVerified(!!userSnap.data().isVerified);
+        } else {
+          setLandlordVerified(user.isVerified ?? false);
+        }
+      }, (error) => {
+        console.log('Error listening to user doc:', error);
+      });
+
+      return () => {
+        unsubProperties();
+        unsubRequests();
+        unsubFurniture();
+        unsubMoving();
+        unsubUser();
+      };
+    }, [user])
+  );
 
   const handleVerifyProperty = async (property: Property) => {
     if (!user) return;
@@ -89,7 +128,6 @@ export default function LandlordDashboard() {
             try {
               await requestPropertyVerification(property.id, user.id, property.title);
               Alert.alert('✅ Verified!', `"${property.title}" now has the Rentify Verified badge.`);
-              fetchLandlordData();
             } catch (e: any) {
               Alert.alert('Error', e.message || 'Could not verify property.');
             } finally {
@@ -129,7 +167,6 @@ export default function LandlordDashboard() {
                 '🎉 Listing Promoted!',
                 `"${property.title}" is now featured on the home screen until ${twoMonthsFromNow.toLocaleDateString()}.`
               );
-              fetchLandlordData();
             } catch (e: any) {
               Alert.alert('Error', e.message || 'Could not promote property.');
             }
@@ -144,7 +181,6 @@ export default function LandlordDashboard() {
       const { updateDoc } = require('firebase/firestore');
       await updateDoc(doc(db, 'viewingRequests', requestId), { status: 'approved' });
       Alert.alert('Request Approved', 'The tenant has been notified.');
-      fetchLandlordData();
     } catch (e) {
       Alert.alert('Error', 'Could not approve request.');
     }
@@ -155,30 +191,29 @@ export default function LandlordDashboard() {
       const { updateDoc } = require('firebase/firestore');
       await updateDoc(doc(db, 'viewingRequests', requestId), { status: 'declined' });
       Alert.alert('Request Declined', 'The request has been declined.');
-      fetchLandlordData();
     } catch (e) {
       Alert.alert('Error', 'Could not decline request.');
     }
   };
 
-  const totalMonthlyIncome = myProperties.reduce((sum, p) => sum + (p.price || 0), 0);
+  const verifiedProperties = myProperties.filter(p => p.isVerified).length;
+  const pendingCount = pendingRequests.filter(r => r.status === 'pending').length;
+  // Calculate total e-commerce + booking income as admin stats
+  const totalFurnitureIncome = furnitureOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0);
+  const totalMonthlyIncome = myProperties.reduce((sum, p) => sum + (p.price || 0), 0) + totalFurnitureIncome;
   const formattedIncome = totalMonthlyIncome >= 1000000
     ? `${(totalMonthlyIncome / 1000000).toFixed(1)}M`
     : totalMonthlyIncome.toLocaleString();
 
-  const verifiedProperties = myProperties.filter(p => p.isVerified).length;
-  const pendingCount = pendingRequests.filter(r => r.status === 'pending').length;
-
   const stats = [
     { label: 'Total Properties', value: myProperties.length.toString(), icon: 'home-city', color: Colors.primary, bg: Colors.primaryLight },
     { label: 'Verified Listings', value: `${verifiedProperties}/${myProperties.length}`, icon: 'shield-check', color: Colors.trust, bg: '#EFF6FF' },
-    { label: 'Pending Requests', value: pendingCount.toString(), icon: 'clock-outline', color: Colors.warning, bg: Colors.warningLight },
-    { label: 'Monthly Income', value: `~${formattedIncome}`, icon: 'cash', color: Colors.airbnb, bg: Colors.airbnbLight },
+    { label: 'Furniture Orders', value: furnitureOrders.length.toString(), icon: 'sofa', color: Colors.warning, bg: Colors.warningLight },
+    { label: 'Total Revenue', value: `${formattedIncome} UGX`, icon: 'cash', color: Colors.airbnb, bg: Colors.airbnbLight },
   ];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar style="dark" backgroundColor="transparent" translucent />
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header */}
         <LinearGradient
@@ -331,69 +366,198 @@ export default function LandlordDashboard() {
               </LinearGradient>
             </TouchableOpacity>
 
-            {/* Pending Viewing Requests */}
+            {/* ── Requests & Orders Tab Switcher ───────────────── */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Viewing Requests</Text>
-              {pendingRequests.length === 0 ? (
-                <View style={styles.emptyCard}>
-                  <MaterialCommunityIcons name="calendar-blank-outline" size={32} color={Colors.muted} />
-                  <Text style={styles.emptyText}>No viewing requests yet.</Text>
-                </View>
-              ) : (
-                pendingRequests.map(req => (
-                  <View key={req.id} style={styles.requestCard}>
-                    <View style={[styles.requestType, {
-                      backgroundColor: req.status === 'approved' ? Colors.successLight : Colors.primaryLight,
-                    }]}>
-                      <MaterialCommunityIcons
-                        name={req.status === 'approved' ? 'calendar-check' : 'calendar'}
-                        size={18}
-                        color={req.status === 'approved' ? Colors.success : Colors.primary}
-                      />
+              <View style={styles.tabHeader}>
+                <TouchableOpacity
+                  style={[styles.tabBtn, activeTab === 'requests' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('requests')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'requests' && styles.tabBtnTextActive]}>
+                    Viewings ({pendingRequests.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tabBtn, activeTab === 'furniture' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('furniture')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'furniture' && styles.tabBtnTextActive]}>
+                    Furniture ({furnitureOrders.length})
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.tabBtn, activeTab === 'movers' && styles.tabBtnActive]}
+                  onPress={() => setActiveTab('movers')}
+                >
+                  <Text style={[styles.tabBtnText, activeTab === 'movers' && styles.tabBtnTextActive]}>
+                    Movers ({movingBookings.length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {activeTab === 'requests' && (
+                <View style={{ gap: Spacing.sm, marginTop: Spacing.sm }}>
+                  {pendingRequests.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <MaterialCommunityIcons name="calendar-blank-outline" size={32} color={Colors.muted} />
+                      <Text style={styles.emptyText}>No viewing requests yet.</Text>
                     </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={styles.requestName}>{req.tenantName || req.contactName || 'Tenant'}</Text>
-                      <Text style={styles.requestProperty} numberOfLines={1}>{req.propertyTitle || 'Property'}</Text>
-                      <Text style={styles.requestTime}>
-                        📅 {req.preferredDate || req.date || 'Upcoming'} at {req.preferredTime || req.time || 'TBD'}
-                      </Text>
-                      {req.tenantPhone && (
-                        <TouchableOpacity
-                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
-                          onPress={() => {
-                            const { Linking } = require('react-native');
-                            Linking.openURL(`tel:${req.tenantPhone}`).catch(() => {});
-                          }}
-                        >
-                          <MaterialCommunityIcons name="phone" size={12} color={Colors.primary} />
-                          <Text style={{ fontSize: FontSize.xs, color: Colors.primary, fontWeight: 'bold' }}>
-                            {req.tenantPhone}
+                  ) : (
+                    pendingRequests.map(req => (
+                      <View key={req.id} style={styles.requestCard}>
+                        <View style={[styles.requestType, {
+                          backgroundColor: req.status === 'approved' ? Colors.successLight : Colors.primaryLight,
+                        }]}>
+                          <MaterialCommunityIcons
+                            name={req.status === 'approved' ? 'calendar-check' : 'calendar'}
+                            size={18}
+                            color={req.status === 'approved' ? Colors.success : Colors.primary}
+                          />
+                        </View>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <Text style={styles.requestName}>{req.tenantName || req.contactName || 'Tenant'}</Text>
+                          <Text style={styles.requestProperty} numberOfLines={1}>{req.propertyTitle || 'Property'}</Text>
+                          <Text style={styles.requestTime}>
+                            📅 {req.preferredDate || req.date || 'Upcoming'} at {req.preferredTime || req.time || 'TBD'}
                           </Text>
-                        </TouchableOpacity>
-                      )}
-                      {req.note ? (
-                        <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, fontStyle: 'italic', marginTop: 4 }}>
-                          "{req.note}"
-                        </Text>
-                      ) : null}
+                          {req.tenantPhone && (
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}
+                              onPress={() => {
+                                const { Linking } = require('react-native');
+                                Linking.openURL(`tel:${req.tenantPhone}`).catch(() => {});
+                              }}
+                            >
+                              <MaterialCommunityIcons name="phone" size={12} color={Colors.primary} />
+                              <Text style={{ fontSize: FontSize.xs, color: Colors.primary, fontWeight: 'bold' }}>
+                                {req.tenantPhone}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                          {req.note ? (
+                            <Text style={{ fontSize: FontSize.xs, color: Colors.textSecondary, fontStyle: 'italic', marginTop: 4 }}>
+                              "{req.note}"
+                            </Text>
+                          ) : null}
+                        </View>
+                        {req.status === 'pending' && (
+                          <View style={styles.requestActions}>
+                            <TouchableOpacity style={styles.rejectBtn} onPress={() => handleRejectRequest(req.id)}>
+                              <MaterialCommunityIcons name="close" size={16} color={Colors.danger} />
+                            </TouchableOpacity>
+                            <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAcceptRequest(req.id)}>
+                              <MaterialCommunityIcons name="check" size={16} color={Colors.white} />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                        {req.status === 'approved' && (
+                          <View style={[styles.statusPill, { backgroundColor: Colors.successLight }]}>
+                            <Text style={{ fontSize: FontSize.xs, color: Colors.success, fontWeight: 'bold' }}>Approved</Text>
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {activeTab === 'furniture' && (
+                <View style={{ gap: Spacing.sm, marginTop: Spacing.sm }}>
+                  {furnitureOrders.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <MaterialCommunityIcons name="sofa-outline" size={32} color={Colors.muted} />
+                      <Text style={styles.emptyText}>No furniture orders placed yet.</Text>
                     </View>
-                    {req.status === 'pending' && (
-                      <View style={styles.requestActions}>
-                        <TouchableOpacity style={styles.rejectBtn} onPress={() => handleRejectRequest(req.id)}>
-                          <MaterialCommunityIcons name="close" size={16} color={Colors.danger} />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.acceptBtn} onPress={() => handleAcceptRequest(req.id)}>
-                          <MaterialCommunityIcons name="check" size={16} color={Colors.white} />
-                        </TouchableOpacity>
+                  ) : (
+                    furnitureOrders.map(order => (
+                      <View key={order.id} style={styles.requestCard}>
+                        <View style={[styles.requestType, { backgroundColor: Colors.warningLight }]}>
+                          <MaterialCommunityIcons name="cart" size={18} color={Colors.warning} />
+                        </View>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={styles.requestName}>{order.customerName}</Text>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: Colors.muted }}>
+                              {order.orderId}
+                            </Text>
+                          </View>
+                          <Text style={styles.requestProperty}>
+                            {order.items?.map((it: any) => `${it.qty}x ${it.name}`).join(', ')}
+                          </Text>
+                          <Text style={styles.requestTime}>
+                            📍 {order.deliveryAddress}
+                          </Text>
+                          <Text style={{ fontSize: FontSize.xs, fontWeight: 'bold', color: '#D97706', marginTop: 2 }}>
+                            UGX {order.totalAmount?.toLocaleString()} ({order.paymentMethod === 'mobile_money' ? 'Paid' : 'COD'})
+                          </Text>
+                          {order.customerPhone && (
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}
+                              onPress={() => {
+                                const { Linking } = require('react-native');
+                                Linking.openURL(`tel:${order.customerPhone}`).catch(() => {});
+                              }}
+                            >
+                              <MaterialCommunityIcons name="phone" size={12} color={Colors.primary} />
+                              <Text style={{ fontSize: FontSize.xs, color: Colors.primary, fontWeight: 'bold' }}>
+                                {order.customerPhone}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
-                    )}
-                    {req.status === 'approved' && (
-                      <View style={[styles.statusPill, { backgroundColor: Colors.successLight }]}>
-                        <Text style={{ fontSize: FontSize.xs, color: Colors.success, fontWeight: 'bold' }}>Approved</Text>
+                    ))
+                  )}
+                </View>
+              )}
+
+              {activeTab === 'movers' && (
+                <View style={{ gap: Spacing.sm, marginTop: Spacing.sm }}>
+                  {movingBookings.length === 0 ? (
+                    <View style={styles.emptyCard}>
+                      <MaterialCommunityIcons name="truck-outline" size={32} color={Colors.muted} />
+                      <Text style={styles.emptyText}>No moving services booked yet.</Text>
+                    </View>
+                  ) : (
+                    movingBookings.map(booking => (
+                      <View key={booking.id} style={styles.requestCard}>
+                        <View style={[styles.requestType, { backgroundColor: Colors.trust + '15' }]}>
+                          <MaterialCommunityIcons name="truck" size={18} color={Colors.trust} />
+                        </View>
+                        <View style={{ flex: 1, gap: 2 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={styles.requestName}>{booking.customerName}</Text>
+                            <Text style={{ fontSize: 10, fontWeight: 'bold', color: Colors.muted }}>
+                              {booking.bookingId}
+                            </Text>
+                          </View>
+                          <Text style={styles.requestProperty}>
+                            Booked: {booking.moverName}
+                          </Text>
+                          <Text style={styles.requestTime}>
+                            Rate: {booking.priceEstimate}
+                          </Text>
+                          {booking.customerPhone && (
+                            <TouchableOpacity
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}
+                              onPress={() => {
+                                const { Linking } = require('react-native');
+                                Linking.openURL(`tel:${booking.customerPhone}`).catch(() => {});
+                              }}
+                            >
+                              <MaterialCommunityIcons name="phone" size={12} color={Colors.primary} />
+                              <Text style={{ fontSize: FontSize.xs, color: Colors.primary, fontWeight: 'bold' }}>
+                                {booking.customerPhone}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
-                    )}
-                  </View>
-                ))
+                    ))
+                  )}
+                </View>
               )}
             </View>
 
@@ -462,7 +626,6 @@ export default function LandlordDashboard() {
         visible={showVerificationModal}
         onClose={() => {
           setShowVerificationModal(false);
-          fetchLandlordData(); // Refresh after closing to pick up new verified status
         }}
       />
     </SafeAreaView>
@@ -479,6 +642,35 @@ const styles = StyleSheet.create({
   },
   headerGreeting: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.white },
   headerSub: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.8)' },
+  tabHeader: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceSecondary,
+    padding: 4,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: Spacing.sm,
+  },
+  tabBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: Radius.md,
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.white,
+    ...Shadow.sm,
+  },
+  tabBtnText: {
+    fontSize: 11,
+    fontWeight: FontWeight.semibold,
+    color: Colors.textSecondary,
+  },
+  tabBtnTextActive: {
+    color: Colors.primary,
+    fontWeight: FontWeight.bold,
+  },
   notifBtn: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center',

@@ -111,7 +111,7 @@ export const MOVER_PROVIDERS: Mover[] = [
   },
 ];
 
-export const DISTRICTS = ['All', 'Kampala', 'Wakiso', 'Mukono', 'Kira', 'Ntinda', 'Entebbe'];
+export const DISTRICTS = ['All', 'Kampala', 'Wakiso', 'Mukono', 'Entebbe'];
 
 // ─── Shared Helper Functions ───────────────────────────────────────────────
 

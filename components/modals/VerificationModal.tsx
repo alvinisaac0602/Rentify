@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import {
   Modal, View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  TextInput, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../../constants/colors';
@@ -30,6 +31,52 @@ export function VerificationModal({ visible, onClose }: Props) {
   const [fullName, setFullName] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [idPhoto, setIdPhoto] = useState<string | null>(null);
+  const [selfie, setSelfie] = useState<string | null>(null);
+
+  const pickIdPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Denied', 'Camera roll access is needed to select ID document photo.');
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!res.canceled && res.assets?.[0]?.uri) {
+      setIdPhoto(res.assets[0].uri);
+    }
+  };
+
+  const pickSelfie = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      // Fallback to library
+      const libRes = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (libRes.status !== 'granted') {
+        Alert.alert('Permission Denied', 'Camera access is required to take a selfie.');
+        return;
+      }
+      const res = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        quality: 0.8,
+      });
+      if (!res.canceled && res.assets?.[0]?.uri) {
+        setSelfie(res.assets[0].uri);
+      }
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.8,
+    });
+    if (!res.canceled && res.assets?.[0]?.uri) {
+      setSelfie(res.assets[0].uri);
+    }
+  };
 
   useEffect(() => {
     if (visible && user) {
@@ -123,6 +170,14 @@ export function VerificationModal({ visible, onClose }: Props) {
       Alert.alert('Document Verification Failed 🚫', idVal.error);
       return;
     }
+    if (!idPhoto) {
+      Alert.alert('Required', 'Please upload a photo of your National ID / Passport.');
+      return;
+    }
+    if (!selfie) {
+      Alert.alert('Required', 'Please upload a selfie photo to match with your ID document.');
+      return;
+    }
     if (!user) return;
 
     setSubmitting(true);
@@ -187,7 +242,7 @@ export function VerificationModal({ visible, onClose }: Props) {
     >
       <KeyboardAvoidingView
         style={styles.root}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         {/* Header */}
         <LinearGradient
@@ -277,6 +332,37 @@ export function VerificationModal({ visible, onClose }: Props) {
                       placeholderTextColor={Colors.placeholder}
                       autoCapitalize="characters"
                     />
+                  </View>
+
+                  {/* ID Document Photo slots */}
+                  <View style={styles.photoContainer}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>National ID Photo *</Text>
+                      <TouchableOpacity style={styles.photoPicker} onPress={pickIdPhoto}>
+                        {idPhoto ? (
+                          <Image source={{ uri: idPhoto }} style={styles.photoPreview} />
+                        ) : (
+                          <View style={styles.pickerContent}>
+                            <MaterialCommunityIcons name="card-account-details-outline" size={24} color={Colors.primary} />
+                            <Text style={styles.pickerText}>Upload ID Front</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>Selfie Match *</Text>
+                      <TouchableOpacity style={styles.photoPicker} onPress={pickSelfie}>
+                        {selfie ? (
+                          <Image source={{ uri: selfie }} style={styles.photoPreview} />
+                        ) : (
+                          <View style={styles.pickerContent}>
+                            <MaterialCommunityIcons name="face-recognition" size={24} color={Colors.primary} />
+                            <Text style={styles.pickerText}>Take Selfie</Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    </View>
                   </View>
 
                   <View style={styles.inputGroup}>
@@ -385,6 +471,37 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.md, paddingVertical: 12,
     fontSize: FontSize.base, color: Colors.text,
     borderWidth: 1.2, borderColor: Colors.border,
+  },
+  photoContainer: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+    marginVertical: Spacing.xs,
+  },
+  photoPicker: {
+    height: 100,
+    backgroundColor: Colors.surfaceSecondary,
+    borderRadius: Radius.md,
+    borderWidth: 1.2,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  photoPreview: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  pickerContent: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  pickerText: {
+    fontSize: 10,
+    color: Colors.muted,
+    fontWeight: FontWeight.semibold,
   },
 
   submitBtn: { borderRadius: Radius.xl, overflow: 'hidden', ...Shadow.md, marginTop: Spacing.sm },

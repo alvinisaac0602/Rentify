@@ -24,15 +24,9 @@ import { db } from '../../config/firebase';
 
 const CATEGORIES: CategoryType[] = ['apartment', 'hostel', 'shop', 'airbnb'];
 
-const PRICE_THRESHOLDS: Record<FilterState['priceRange'], [number, number]> = {
-  all: [0, Infinity],
-  budget: [0, 700000],
-  mid: [700001, 3000000],
-  premium: [3000001, Infinity],
-};
-
 function applyFilters(properties: Property[], filters: FilterState): Property[] {
-  const [minP, maxP] = PRICE_THRESHOLDS[filters.priceRange];
+  const minP = filters.minPrice > 0 ? filters.minPrice : 0;
+  const maxP = filters.maxPrice > 0 ? filters.maxPrice : Infinity;
   return properties.filter(p => {
     if (filters.category !== 'all' && p.category !== filters.category) return false;
     if (filters.verifiedOnly && !p.isVerified) return false;
@@ -41,10 +35,11 @@ function applyFilters(properties: Property[], filters: FilterState): Property[] 
     if (filters.district !== 'All') {
       const dist = p.district || '';
       const loc = p.location || '';
-      const query = filters.district.toLowerCase();
-      if (!dist.toLowerCase().includes(query) && !loc.toLowerCase().includes(query)) return false;
+      const dq = filters.district.toLowerCase();
+      if (!dist.toLowerCase().includes(dq) && !loc.toLowerCase().includes(dq)) return false;
     }
-    if (p.price < minP || p.price > maxP) return false;
+    if (minP > 0 && p.price < minP) return false;
+    if (maxP < Infinity && p.price > maxP) return false;
     if (filters.bedrooms !== 'any') {
       const beds = p.bedrooms ?? 0;
       if (filters.bedrooms === '4+') { if (beds < 4) return false; }
@@ -67,7 +62,8 @@ export default function HomeScreen() {
     verifiedOnly?: string;
     furnished?: string;
     district?: string;
-    priceRange?: string;
+    minPrice?: string;
+    maxPrice?: string;
     bedrooms?: string;
     bathrooms?: string;
     minTrustScore?: string;
@@ -82,6 +78,21 @@ export default function HomeScreen() {
   const [dbProperties, setDbProperties] = useState<Property[]>([]);
   const [blockedUserIds, setBlockedUserIds] = useState<string[]>([]);
   const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
+  const [realUserIds, setRealUserIds] = useState<string[]>([]);
+
+  // Real-time users listener to exclude properties owned by non-existent/mock landlords
+  useEffect(() => {
+    if (checkingOnboarding) return;
+    const usersRef = collection(db, 'users');
+    const unsubscribe = onSnapshot(usersRef, (snapshot) => {
+      const ids = snapshot.docs.map(doc => doc.id);
+      setRealUserIds(ids);
+    }, (err) => {
+      console.log('Error listening to users:', err);
+    });
+    return () => unsubscribe();
+  }, [checkingOnboarding]);
 
   // Real-time blocked users listener
   useEffect(() => {
@@ -108,7 +119,9 @@ export default function HomeScreen() {
         verifiedOnly: params.verifiedOnly !== undefined ? params.verifiedOnly === 'true' : prev.verifiedOnly,
         furnished: (params.furnished as any) ?? prev.furnished,
         district: params.district ?? prev.district,
-        priceRange: (params.priceRange as any) ?? prev.priceRange,
+        priceRange: 'all',
+        minPrice: params.minPrice !== undefined ? parseInt(params.minPrice) : prev.minPrice,
+        maxPrice: params.maxPrice !== undefined ? parseInt(params.maxPrice) : prev.maxPrice,
         bedrooms: params.bedrooms !== undefined
           ? (params.bedrooms === 'any' || params.bedrooms === '4+' ? params.bedrooms : (parseInt(params.bedrooms) as any))
           : prev.bedrooms,
@@ -123,16 +136,29 @@ export default function HomeScreen() {
   useEffect(() => {
     AsyncStorage.getItem('onboarding_done').then(val => {
       if (!val) {
+        SplashScreen.hideAsync().catch(() => {});
         router.replace('/onboarding' as any);
       } else {
+        // Hide splash FIRST before showing home content to avoid flash
+        SplashScreen.hideAsync().catch(() => {});
         setCheckingOnboarding(false);
         if (shouldShow) {
           router.push('/screens/welcome' as any);
         }
-        SplashScreen.hideAsync().catch(() => { });
       }
     });
   }, []);
+
+  // Offline detection via Firestore errors (no extra package needed)
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    if (dbProperties.length === 0 && !checkingOnboarding) {
+      timeout = setTimeout(() => setIsOffline(true), 8000);
+    } else {
+      setIsOffline(false);
+    }
+    return () => clearTimeout(timeout);
+  }, [dbProperties, checkingOnboarding]);
 
   // Real-time properties listener
   useEffect(() => {
@@ -147,6 +173,7 @@ export default function HomeScreen() {
         ...doc.data()
       })) as Property[];
       setDbProperties(properties);
+      setIsOffline(false);
 
       // Prefetch all retrieved property images for instant navigation display
       properties.forEach(p => {
@@ -158,15 +185,20 @@ export default function HomeScreen() {
       });
     }, (err) => {
       console.error('Error listening to properties:', err);
+      setIsOffline(true);
     });
 
     return () => unsubscribe();
   }, [checkingOnboarding]);
 
   const allProperties = useMemo(() => {
-    if (blockedUserIds.length === 0) return dbProperties;
-    return dbProperties.filter(p => !blockedUserIds.includes(p.landlordId));
-  }, [dbProperties, blockedUserIds]);
+    let list = dbProperties;
+    if (realUserIds.length > 0) {
+      list = list.filter(p => realUserIds.includes(p.landlordId));
+    }
+    if (blockedUserIds.length === 0) return list;
+    return list.filter(p => !blockedUserIds.includes(p.landlordId));
+  }, [dbProperties, blockedUserIds, realUserIds]);
 
   const filteredProperties = useMemo(() => {
     return applyFilters(allProperties, filters);
@@ -174,11 +206,8 @@ export default function HomeScreen() {
 
   const featuredProperties = useMemo(() => {
     const now = new Date().toISOString();
-    // Paid featured listings first (featuredUntil > now), then verified, then newest
-    const paid = filteredProperties.filter(p => p.featuredUntil && p.featuredUntil > now);
-    const rest = filteredProperties.filter(p => !p.featuredUntil || p.featuredUntil <= now);
-    const sorted = [...paid, ...rest.filter(p => p.isVerified), ...rest.filter(p => !p.isVerified)];
-    return sorted.slice(0, 8);
+    // Strictly only return active featured properties (where featuredUntil is in the future)
+    return filteredProperties.filter(p => p.featuredUntil && p.featuredUntil > now);
   }, [filteredProperties]);
 
   const nearbyProperties = useMemo(() => {
@@ -321,7 +350,8 @@ export default function HomeScreen() {
                   verifiedOnly: String(filters.verifiedOnly),
                   furnished: filters.furnished,
                   district: filters.district,
-                  priceRange: filters.priceRange,
+                  minPrice: String(filters.minPrice),
+                  maxPrice: String(filters.maxPrice),
                   bedrooms: String(filters.bedrooms),
                   bathrooms: String(filters.bathrooms),
                   minTrustScore: String(filters.minTrustScore),
@@ -343,6 +373,14 @@ export default function HomeScreen() {
 
         {/* ── Quick Filter Chips ───────────────────────── */}
         <FilterChips filters={filters} onChange={setFilters} />
+
+        {/* ── Offline Banner ───────────────────────────── */}
+        {isOffline && (
+          <View style={styles.offlineBanner}>
+            <MaterialCommunityIcons name="wifi-off" size={14} color="#92400E" />
+            <Text style={styles.offlineText}>No internet connection — showing cached listings</Text>
+          </View>
+        )}
 
         {/* ── Active Filter Bar ────────────────────────── */}
         {activeCount > 0 && (
@@ -420,8 +458,17 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           {/* ── Featured Listings ────────────────────────── */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Featured Listings</Text>
+          <View style={[styles.sectionHeader, styles.featuredHeader]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <LinearGradient
+                colors={['#F59E0B', '#D97706']}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                style={styles.featuredIconBg}
+              >
+                <MaterialCommunityIcons name="star" size={14} color="#fff" />
+              </LinearGradient>
+              <Text style={styles.sectionTitle}>Featured Listings</Text>
+            </View>
             <TouchableOpacity onPress={() => router.push('/explore' as any)}>
               <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>
@@ -439,11 +486,14 @@ export default function HomeScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalList}
               ItemSeparatorComponent={() => <View style={{ width: Spacing.md }} />}
-              renderItem={({ item }) => (
-                <View style={{ width: 240 }}>
-                  <PropertyCard property={item} isSaved={savedIds.includes(item.id)} onSave={() => handleSave(item.id)} />
-                </View>
-              )}
+              renderItem={({ item }) => {
+                const isFeat = !!(item.featuredUntil && item.featuredUntil > new Date().toISOString());
+                return (
+                  <View style={{ width: 260 }}>
+                    <PropertyCard property={item} isSaved={savedIds.includes(item.id)} onSave={() => handleSave(item.id)} isFeaturedSection={isFeat} />
+                  </View>
+                );
+              }}
             />
           )}
 
@@ -511,6 +561,14 @@ const styles = StyleSheet.create({
   locationPillActive: { backgroundColor: 'rgba(255,255,255,0.25)', borderColor: Colors.white },
   locationText: { fontSize: FontSize.sm, color: 'rgba(255,255,255,0.75)', fontWeight: FontWeight.medium },
   locationTextActive: { color: Colors.white, fontWeight: FontWeight.semibold },
+  offlineBanner: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    marginHorizontal: Spacing.base, marginBottom: Spacing.sm,
+    paddingHorizontal: Spacing.md, paddingVertical: 8,
+    backgroundColor: '#FEF3C7', borderRadius: Radius.lg,
+    borderWidth: 1, borderColor: '#F59E0B40',
+  },
+  offlineText: { flex: 1, fontSize: FontSize.sm, color: '#92400E', fontWeight: FontWeight.medium },
   activeFilterBar: {
     flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
     marginHorizontal: Spacing.base, marginBottom: Spacing.sm,
@@ -522,6 +580,8 @@ const styles = StyleSheet.create({
   clearText: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.bold },
   body: { padding: Spacing.base, gap: Spacing.sm, paddingBottom: Spacing['4xl'] },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: Spacing.base, marginBottom: Spacing.md },
+  featuredHeader: { marginTop: Spacing.md },
+  featuredIconBg: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: FontSize.lg, fontWeight: FontWeight.bold, color: Colors.text },
   seeAll: { fontSize: FontSize.sm, color: Colors.primary, fontWeight: FontWeight.semibold },
   categoryGrid: { flexDirection: 'row', gap: Spacing.md, marginBottom: Spacing.md },
